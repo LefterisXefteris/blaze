@@ -1,0 +1,22 @@
+[package]
+name = "blaze-desktop"
+version = "0.1.0"
+description = "Blaze desktop companion — local handoff delivery and Cursor integration"
+authors = ["Blaze"]
+edition = "2021"
+
+[lib]
+name = "blaze_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["time"] }
+dirs = "6"

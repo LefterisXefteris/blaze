@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String           @id @db.Uuid
+  name            String?
+  email           String?          @unique
+  image           String?
+  timezone        String           @default("UTC")
+  undoWindowMin   Int              @default(15)
+  integrations    Integration[]
+  captureSessions CaptureSession[]
+  recipes         Recipe[]
+  priorityItems   PriorityItem[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+}
+
+enum IntegrationProvider {
+  GOOGLE_CALENDAR
+  SLACK
+  GITHUB
+}
+
+model Integration {
+  id           String              @id @default(cuid())
+  userId       String              @db.Uuid
+  provider     IntegrationProvider
+  accessToken  String              @db.Text
+  refreshToken String?             @db.Text
+  expiresAt    DateTime?
+  metadata     Json?
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @default(now()) @updatedAt
+
+  @@unique([userId, provider])
+}
+
+enum CaptureSourceType {
+  MANUAL
+  SLACK
+  MEETING
+  GITHUB
+}
+
+enum CaptureSessionStatus {
+  ACTIVE
+  ENDED
+}
+
+model CaptureSession {
+  id           String               @id @default(cuid())
+  userId       String               @db.Uuid
+  title        String?
+  sourceType   CaptureSourceType    @default(MANUAL)
+  sourceRef    String?
+  status       CaptureSessionStatus @default(ACTIVE)
+  userNotes    String               @default("") @db.Text
+  liveSummary  String               @default("") @db.Text
+  metadata     Json?
+  startedAt    DateTime             @default(now())
+  endedAt      DateTime?
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  note         Note?
+  agentActions AgentAction[]
+  priorityItems PriorityItem[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @default(now()) @updatedAt
+
+  @@index([userId, status])
+  @@index([sourceType, sourceRef])
+}
+
+model Message {
+  id         String         @id @default(cuid())
+  sessionId  String
+  externalId String?
+  speaker    String
+  content    String         @db.Text
+  sentAt     DateTime       @default(now())
+  session    CaptureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, externalId])
+  @@index([sessionId, sentAt])
+}
+
+model Note {
+  id         String         @id @default(cuid())
+  sessionId  String         @unique
+  aiSummary  String         @db.Text
+  structured Json
+  session    CaptureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @default(now()) @updatedAt
+}
+
+enum IntentType {
+  CALENDAR_EVENT
+  TODO
+  FOLLOW_UP_EMAIL
+  TICKET
+  CRM_UPDATE
+  GITHUB_COMMENT
+  GITHUB_LABEL
+  GITHUB_PRIORITY
+  GITHUB_ACK_COMMENT
+  GITHUB_NEXT_STEPS
+}
+
+enum RiskLevel {
+  LOW
+  HIGH
+}
+
+enum AgentActionStatus {
+  PENDING
+  AUTO_EXECUTED
+  CONFIRMED
+  REJECTED
+  UNDONE
+  FAILED
+}
+
+model AgentAction {
+  id               String            @id @default(cuid())
+  sessionId        String
+  intentType       IntentType
+  riskLevel        RiskLevel
+  status           AgentActionStatus @default(PENDING)
+  confidence       Float             @default(0)
+  payload          Json
+  result           Json?
+  sourceMessageIds String[]
+  externalId       String?
+  undoExpiresAt    DateTime?
+  session          CaptureSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  revisions        ActionRevision[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+
+  @@index([sessionId])
+  @@index([status])
+}
+
+model ActionRevision {
+  id        String      @id @default(cuid())
+  actionId  String
+  payload   Json
+  action    AgentAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+}
+
+model Recipe {
+  id          String   @id @default(cuid())
+  userId      String   @db.Uuid
+  name        String
+  prompt      String   @db.Text
+  description String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@unique([userId, name])
+}
+
+model PriorityItem {
+  id          String          @id @default(cuid())
+  userId      String          @db.Uuid
+  source      String          @default("github")
+  externalId  String
+  externalUrl String
+  itemType    String
+  title       String
+  repo        String
+  reason      String
+  priority    Int             @default(2)
+  status      String          @default("open")
+  aiSummary   String?         @db.Text
+  sessionId   String?
+  metadata    Json?
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session     CaptureSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt
+
+  @@unique([userId, source, externalId])
+  @@index([userId, status, priority])
+}
+
+model WebhookDelivery {
+  id         String   @id
+  provider   String
+  receivedAt DateTime @default(now())
+}
+
+enum ContextSourceType {
+  GITHUB
+  MEETING
+  NOTE
+  PRIORITY
+}
+
+enum ContextLinkReason {
+  EXPLICIT
+  SEMANTIC
+  ENTITY_MATCH
+  CALENDAR
+}
+
+model ContextChunk {
+  id         String            @id @default(cuid())
+  userId     String            @db.Uuid
+  sourceType ContextSourceType
+  sourceId   String
+  sourceRef  String?
+  chunkIndex Int               @default(0)
+  content    String            @db.Text
+  purpose    String?           @db.Text
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @default(now()) @updatedAt
+
+  @@unique([userId, sourceType, sourceId, chunkIndex])
+  @@index([userId, sourceType])
+  @@index([userId, sourceRef])
+}
+
+model ContextLink {
+  id         String            @id @default(cuid())
+  userId     String            @db.Uuid
+  fromType   String
+  fromId     String
+  toType     String
+  toId       String
+  linkReason ContextLinkReason @default(SEMANTIC)
+  confidence Float             @default(1)
+  createdAt  DateTime          @default(now())
+
+  @@unique([userId, fromId, toId])
+  @@index([userId, fromId])
+}

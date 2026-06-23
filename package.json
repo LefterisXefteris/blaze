@@ -1,26 +1,58 @@
 {
-  "name": "web",
+  "name": "blaze",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "setup:api": "cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    "dev:api": "cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000",
+    "dev:all": "npm run dev:api & npm run dev",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "mcp": "tsx src/mcp/server.ts",
+    "worker": "cd backend && .venv/bin/python worker.py",
+    "blaze": "cd backend && .venv/bin/python blaze.py",
+    "desktop:dev": "cd desktop && npm run tauri:dev",
+    "desktop:build": "cd desktop && npm run tauri:build",
+    "desktop:install": "cd desktop && npm install"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@slack/oauth": "^3.0.5",
+    "@slack/web-api": "^7.17.0",
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "bullmq": "^5.79.0",
+    "date-fns": "^4.4.0",
+    "dotenv": "^16.5.0",
+    "googleapis": "^173.0.0",
+    "ioredis": "^5.11.1",
     "next": "16.2.9",
+    "openai": "^6.44.0",
+    "pg": "^8.22.0",
+    "prisma": "^7.8.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

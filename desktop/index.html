@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blaze Desktop</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div class="brand">
+          <span class="brand-mark">🔥</span>
+          <div>
+            <h1>Blaze Desktop</h1>
+            <p class="subtitle">Local handoff bridge for Cursor</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Quick actions</h2>
+        <div class="actions">
+          <button type="button" id="open-blaze" class="btn primary">Open Blaze</button>
+          <button type="button" id="poll-now" class="btn secondary">Deliver handoffs now</button>
+        </div>
+        <p id="status" class="status">Ready</p>
+        <ul id="delivered-list" class="delivered-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Connection</h2>
+        <form id="settings-form">
+          <label>
+            <span>Blaze app URL</span>
+            <input id="app-url" type="url" placeholder="http://localhost:3000" />
+          </label>
+          <label>
+            <span>API URL (FastAPI)</span>
+            <input id="api-url" type="url" placeholder="http://127.0.0.1:8000" />
+          </label>
+          <label>
+            <span>Access token (Supabase JWT)</span>
+            <input
+              id="access-token"
+              type="password"
+              placeholder="Paste from browser after logging into Blaze"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            <span>Handoff directory (optional)</span>
+            <input
+              id="handoff-dir"
+              type="text"
+              placeholder="Default: nearest git repo /.blaze/handoffs"
+            />
+          </label>
+          <div class="row">
+            <label class="checkbox">
+              <input id="cursor-rules" type="checkbox" checked />
+              <span>Write .cursor/rules/blaze-handoff.mdc</span>
+            </label>
+          </div>
+          <label>
+            <span>Poll interval (seconds)</span>
+            <input id="poll-interval" type="number" min="15" value="30" />
+          </label>
+          <button type="submit" class="btn primary">Save settings</button>
+        </form>
+      </section>
+
+      <section class="card muted-card">
+        <h2>How it works</h2>
+        <ol>
+          <li>Run Blaze web + API locally (or point at production).</li>
+          <li>Log in via <strong>Open Blaze</strong> and approve a handoff action.</li>
+          <li>Desktop polls for confirmed handoffs and writes them locally.</li>
+          <li>Cursor opens with the handoff file + rules snippet.</li>
+        </ol>
+        <p class="hint">
+          Get your access token: log into Blaze in the browser, open DevTools →
+          Application → Cookies → copy the Supabase <code>access_token</code> from the
+          auth cookie, or use the JWT from your session.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
