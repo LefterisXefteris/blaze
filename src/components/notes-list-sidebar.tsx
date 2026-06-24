@@ -252,6 +252,7 @@ export function NotesListSidebar({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async (nextOffset: number, append: boolean) => {
     if (append) setLoadingMore(true);
@@ -259,8 +260,21 @@ export function NotesListSidebar({
 
     try {
       const res = await fetch(`/api/notes/list?limit=30&offset=${nextOffset}`);
-      if (!res.ok) return;
+      if (res.status === 401 || res.status === 403) {
+        setLoadError(
+          "Not signed in — open the login page and use Enter demo, or sync session from Desktop settings."
+        );
+        setItems([]);
+        setHasMore(false);
+        return;
+      }
+      if (!res.ok) {
+        setLoadError("Could not load notes — start the API with npm run dev:all.");
+        if (!append) setItems([]);
+        return;
+      }
       const data = await res.json();
+      setLoadError(null);
       setItems((prev) =>
         append ? [...prev, ...(data.items ?? [])] : (data.items ?? [])
       );
@@ -307,8 +321,13 @@ export function NotesListSidebar({
               </div>
             ))}
           </div>
+        ) : loadError ? (
+          <p className="notes-sidebar-empty">{loadError}</p>
         ) : items.length === 0 ? (
-          <p className="notes-sidebar-empty">No notes yet. Start writing or capture a Slack huddle.</p>
+          <p className="notes-sidebar-empty">
+            No notes yet. Click <strong>New</strong> to start writing, or capture a Slack
+            huddle from Connections.
+          </p>
         ) : (
           groups.map((group) => (
             <section key={group.key} className="notes-sidebar-group">

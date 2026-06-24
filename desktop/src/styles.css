@@ -238,6 +238,6 @@ textarea {
   resize: vertical;
 }
 
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.notepad-hint {
+  margin: 8px 0 0;
 }

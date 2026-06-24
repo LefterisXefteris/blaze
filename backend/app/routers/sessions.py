@@ -35,13 +35,19 @@ def new_id() -> str:
 
 
 @router.get("")
-async def list_sessions(session: AppSession = Depends(require_auth)):
+async def list_sessions(
+    status: str | None = None,
+    source_type: str | None = None,
+    session: AppSession = Depends(require_auth),
+):
     async with AsyncSessionLocal() as db:
+        stmt = select(CaptureSession).where(CaptureSession.userId == session.user.id)
+        if status:
+            stmt = stmt.where(CaptureSession.status == CaptureSessionStatus(status))
+        if source_type:
+            stmt = stmt.where(CaptureSession.sourceType == CaptureSourceType(source_type))
         result = await db.execute(
-            select(CaptureSession)
-            .where(CaptureSession.userId == session.user.id)
-            .order_by(CaptureSession.startedAt.desc())
-            .limit(50)
+            stmt.order_by(CaptureSession.startedAt.desc()).limit(50)
         )
         sessions = result.scalars().all()
         output = []
@@ -194,6 +200,15 @@ async def append_to_session(
 
     await enqueue_intent_extraction(session_id)
     schedule_live_notes_update(session_id)
+
+    if body.get("source") == "voice" and body.get("content"):
+        from app.services.integrations.slack_voice import notify_slack_voice_line
+
+        await notify_slack_voice_line(
+            session_id,
+            str(body.get("speaker") or "You"),
+            str(body["content"]),
+        )
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(

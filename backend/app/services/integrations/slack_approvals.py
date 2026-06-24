@@ -19,16 +19,18 @@ from app.models import (
     Integration,
     IntegrationProvider,
 )
+from app.config import get_settings
 from app.services.agent.action_executor import confirm_action, reject_action
 from app.services.integrations.slack import get_slack_client
+from app.services.integrations.slack_voice import voice_listen_hint
 from app.utils import app_origin
 
 APPROVE_PREFIX = "blaze_approve"
 REJECT_PREFIX = "blaze_reject"
 LIVE_NOTES_MIN_INTERVAL_SEC = 30
 LIVE_NOTES_PLACEHOLDER = (
-    "_Taking notes… type in this thread or open Blaze for voice capture — "
-    "Blaze will summarize key points, decisions, and action items here._"
+    "_Taking notes… type in this thread, or open Blaze for *voice capture* "
+    "(ElevenLabs Scribe when configured). Blaze summarizes key points here._"
 )
 APPROVAL_COMMAND = re.compile(
     r"^blaze\s+(approve|dismiss|reject)(?:\s+([a-f0-9]{6,24}))?$",
@@ -266,6 +268,21 @@ async def post_session_started_notice(session: CaptureSession) -> None:
         pass
 
     blocks = _live_notes_blocks(session, session.liveSummary or "")
+    settings = get_settings()
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": voice_listen_hint(
+                        elevenlabs_configured=bool(settings.elevenlabs_api_key),
+                        session_id=session.id,
+                    ),
+                }
+            ],
+        }
+    )
     text = f"Blaze live notes · {session.title or kind}"
 
     post_kwargs: dict[str, Any] = {

@@ -96,24 +96,28 @@ fn apply_repo_env(mut config: DesktopConfig) -> DesktopConfig {
     config
 }
 
-fn normalize_config(mut config: DesktopConfig) -> DesktopConfig {
-    // Port 3000 is commonly Grafana/docker — Blaze dev runs on 3010.
-    if config.app_url.contains("localhost:3000") || config.app_url.contains("127.0.0.1:3000") {
-        config.app_url = config
-            .app_url
-            .replace("localhost:3000", "localhost:3010")
-            .replace("127.0.0.1:3000", "127.0.0.1:3010");
-    }
+/// Port 3000 is commonly Grafana/docker — Blaze dev runs on 3010. Rewrite it so
+/// the notepad webview can never accidentally load Grafana's login page.
+fn rewrite_grafana_port(url: &str) -> String {
+    url.replace("localhost:3000", "localhost:3010")
+        .replace("127.0.0.1:3000", "127.0.0.1:3010")
+}
 
+fn normalize_config(mut config: DesktopConfig) -> DesktopConfig {
     if config.app_url.trim().is_empty() {
         config.app_url = DesktopConfig::default().app_url;
     }
 
-    apply_repo_env(config)
+    // Apply env overrides first, then rewrite the Grafana port last so a stray
+    // `:3000` from .env or a stale config can't survive normalization.
+    config = apply_repo_env(config);
+    config.app_url = rewrite_grafana_port(&config.app_url);
+    config
 }
 
 pub fn blaze_notes_url(config: &DesktopConfig) -> String {
-    notes_url_from_app_base(&apply_repo_env(config.clone()).app_url)
+    let resolved = apply_repo_env(config.clone());
+    notes_url_from_app_base(&rewrite_grafana_port(&resolved.app_url))
 }
 
 pub fn load_config(app: &AppHandle) -> DesktopConfig {
