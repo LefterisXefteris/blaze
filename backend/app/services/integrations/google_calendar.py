@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -8,6 +9,45 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models import Integration, IntegrationProvider
+
+
+def new_id() -> str:
+    return secrets.token_hex(12)
+
+
+async def save_google_integration(
+    user_id: str,
+    access_token: str,
+    refresh_token: str | None = None,
+    expires_at: datetime | None = None,
+) -> None:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Integration).where(
+                Integration.userId == user_id,
+                Integration.provider == IntegrationProvider.GOOGLE_CALENDAR,
+            )
+        )
+        integration = result.scalar_one_or_none()
+
+        if integration:
+            integration.accessToken = access_token
+            if refresh_token:
+                integration.refreshToken = refresh_token
+            if expires_at:
+                integration.expiresAt = expires_at
+        else:
+            db.add(
+                Integration(
+                    id=new_id(),
+                    userId=user_id,
+                    provider=IntegrationProvider.GOOGLE_CALENDAR,
+                    accessToken=access_token,
+                    refreshToken=refresh_token,
+                    expiresAt=expires_at,
+                )
+            )
+        await db.commit()
 
 
 async def _get_google_credentials(user_id: str) -> Credentials:

@@ -1,36 +1,34 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { appOrigin, ensureDbUser, syncGoogleTokens } from "@/lib/auth";
+import { appOrigin, completeGoogleOAuth } from "@/lib/auth";
+import { setSessionCookie } from "@/lib/session";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/notes";
+  let next = "/notes";
 
-  if (code) {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (!error && data.session?.user) {
-      await ensureDbUser(data.session.user);
-      await syncGoogleTokens(data.session.user.id, {
-        provider_token: data.session.provider_token,
-        provider_refresh_token: data.session.provider_refresh_token,
-        expires_in: data.session.expires_in,
-      });
+  const state = searchParams.get("state");
+  if (state) {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(state, "base64url").toString("utf-8")
+      ) as { next?: string };
+      if (parsed.next) next = parsed.next;
+    } catch {
+      // ignore malformed state
     }
   }
 
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const isLocalEnv = process.env.NODE_ENV === "development";
-
-  if (isLocalEnv) {
-    return NextResponse.redirect(`${appOrigin()}${next}`);
+  if (!code) {
+    return NextResponse.redirect(`${appOrigin()}/login?error=oauth`);
   }
 
-  if (forwardedHost) {
-    return NextResponse.redirect(`https://${forwardedHost}${next}`);
+  try {
+    const { accessToken } = await completeGoogleOAuth(code);
+    const response = NextResponse.redirect(`${appOrigin()}${next}`);
+    setSessionCookie(response, accessToken);
+    return response;
+  } catch {
+    return NextResponse.redirect(`${appOrigin()}/login?error=oauth`);
   }
-
-  return NextResponse.redirect(`${origin}${next}`);
 }

@@ -2,12 +2,129 @@
 
 import { useEffect, useState } from "react";
 
+type RepoMapping = { repo: string; path: string };
+
+function RepoWorkspaceSettings() {
+  const [rows, setRows] = useState<RepoMapping[]>([{ repo: "", path: "" }]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/local/repo-workspaces")
+      .then((r) => (r.ok ? r.json() : { mappings: {} }))
+      .then((data: { mappings?: Record<string, string> }) => {
+        const entries = Object.entries(data.mappings ?? {});
+        setRows(
+          entries.length > 0
+            ? entries.map(([repo, path]) => ({ repo, path }))
+            : [{ repo: "", path: "" }]
+        );
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setNotice(null);
+    const mappings = Object.fromEntries(
+      rows
+        .map((r) => [r.repo.trim(), r.path.trim()] as const)
+        .filter(([repo, path]) => repo && path)
+    );
+    const res = await fetch("/api/local/repo-workspaces", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mappings }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setNotice("Saved — new handoffs will use these paths.");
+    } else {
+      setNotice("Could not save mappings (is the API running locally?).");
+    }
+  };
+
+  if (loading) {
+    return <p className="text-sm text-muted mt-3">Loading…</p>;
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      {rows.map((row, index) => (
+        <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1.4fr_auto] items-end">
+          <label className="text-sm">
+            <span className="text-muted text-xs">GitHub repo</span>
+            <input
+              type="text"
+              value={row.repo}
+              placeholder="ClickHouse/ClickHouse"
+              className="mt-1 w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+              onChange={(e) => {
+                const next = [...rows];
+                next[index] = { ...next[index], repo: e.target.value };
+                setRows(next);
+              }}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="text-muted text-xs">Local path</span>
+            <input
+              type="text"
+              value={row.path}
+              placeholder="/Users/you/projects/ClickHouse"
+              className="mt-1 w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm font-mono"
+              onChange={(e) => {
+                const next = [...rows];
+                next[index] = { ...next[index], path: e.target.value };
+                setRows(next);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="text-sm text-muted hover:text-foreground px-2 py-2"
+            onClick={() => setRows(rows.filter((_, i) => i !== index))}
+            disabled={rows.length === 1}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          type="button"
+          className="text-sm px-3 py-1.5 rounded-md border border-border-subtle"
+          onClick={() => setRows([...rows, { repo: "", path: "" }])}
+        >
+          Add repo
+        </button>
+        <button
+          type="button"
+          className="text-sm px-4 py-1.5 rounded-md btn-primary"
+          disabled={saving}
+          onClick={() => void save()}
+        >
+          {saving ? "Saving…" : "Save mappings"}
+        </button>
+      </div>
+      {notice && <p className="text-xs text-muted">{notice}</p>}
+      <p className="text-xs text-muted">
+        Stored in <code>~/.blaze/repos.json</code>. Override per machine with{" "}
+        <code>BLAZE_REPO_MAP=org/repo=/path,other/repo=/path2</code> in <code>.env</code>.
+      </p>
+    </div>
+  );
+}
+
 type IntegrationStatus = {
   google: boolean;
+  googleConfigured: boolean;
   slack: boolean;
   slackConfigured: boolean;
   appUrl: string;
   github: boolean;
+  githubConfigured: boolean;
   githubLogin: string | null;
   githubSettings: {
     autoAssign?: boolean;
@@ -25,13 +142,17 @@ type IntegrationStatus = {
 
 export default function SettingsPage() {
   const [slackNotice, setSlackNotice] = useState<string | null>(null);
+  const [githubNotice, setGithubNotice] = useState<string | null>(null);
+  const [googleNotice, setGoogleNotice] = useState<string | null>(null);
 
   const [status, setStatus] = useState<IntegrationStatus>({
     google: false,
+    googleConfigured: false,
     slack: false,
     slackConfigured: false,
-    appUrl: "http://localhost:3001",
+    appUrl: "http://localhost:3010",
     github: false,
+    githubConfigured: false,
     githubLogin: null,
     githubSettings: null,
     slackSettings: null,
@@ -46,6 +167,8 @@ export default function SettingsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setSlackNotice(params.get("slack"));
+    setGithubNotice(params.get("github"));
+    setGoogleNotice(params.get("google"));
   }, []);
 
   useEffect(() => {
@@ -82,6 +205,9 @@ export default function SettingsPage() {
   const slackCallbackUrl = `${status.appUrl}/api/integrations/slack/callback`;
   const slackEventsUrl = `${status.appUrl}/api/slack/events`;
   const slackInteractionsUrl = `${status.appUrl}/api/slack/interactions`;
+  const githubCallbackUrl = `${status.appUrl}/api/integrations/github/callback`;
+  const googleCallbackUrl = `${status.appUrl}/api/integrations/google/callback`;
+  const googleLoginCallbackUrl = `${status.appUrl}/auth/callback`;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -98,6 +224,37 @@ export default function SettingsPage() {
       {slackNotice === "not_configured" && (
         <p className="text-sm text-blaze-red card p-3 mb-4">
           Slack isn&apos;t configured yet — add credentials to <code>.env</code> first (see below).
+        </p>
+      )}
+      {githubNotice === "connected" && (
+        <p className="text-sm badge-success card p-3 mb-4">GitHub connected successfully.</p>
+      )}
+      {githubNotice === "error" && (
+        <p className="text-sm text-blaze-red card p-3 mb-4">
+          GitHub connection failed. Check your OAuth app credentials and callback URL, then try again.
+        </p>
+      )}
+      {githubNotice === "not_configured" && (
+        <p className="text-sm text-blaze-red card p-3 mb-4">
+          GitHub isn&apos;t configured yet — add <code>GITHUB_CLIENT_ID</code> and{" "}
+          <code>GITHUB_CLIENT_SECRET</code> to <code>.env</code> first (see below).
+        </p>
+      )}
+      {googleNotice === "connected" && (
+        <p className="text-sm badge-success card p-3 mb-4">
+          Google Calendar connected successfully.
+        </p>
+      )}
+      {googleNotice === "error" && (
+        <p className="text-sm text-blaze-red card p-3 mb-4">
+          Google Calendar connection failed. Check your OAuth credentials and redirect
+          URLs, then try again.
+        </p>
+      )}
+      {googleNotice === "not_configured" && (
+        <p className="text-sm text-blaze-red card p-3 mb-4">
+          Google isn&apos;t configured yet — add <code>GOOGLE_CLIENT_ID</code> and{" "}
+          <code>GOOGLE_CLIENT_SECRET</code> to <code>.env</code> first (see below).
         </p>
       )}
 
@@ -120,6 +277,67 @@ export default function SettingsPage() {
               {status.google ? "Connected" : "Not connected"}
             </span>
           </div>
+          {!status.google ? (
+            <div className="mt-4 space-y-3">
+              {!status.googleConfigured ? (
+                <div className="text-sm space-y-3 card p-4 bg-surface-muted/30">
+                  <p className="font-medium">Set up Google Calendar (one-time)</p>
+                  <ol className="list-decimal pl-5 space-y-2 text-muted">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://console.cloud.google.com/apis/credentials"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-link hover:underline"
+                      >
+                        Google Cloud Console → Credentials
+                      </a>{" "}
+                      → <strong>Create OAuth client ID</strong> (Web application)
+                    </li>
+                    <li>
+                      Enable the <strong>Google Calendar API</strong> for your project
+                    </li>
+                    <li>
+                      Add authorized redirect URIs:
+                      <pre className="mt-2 p-2 rounded bg-surface text-xs overflow-x-auto">{`${googleLoginCallbackUrl}
+${googleCallbackUrl}`}</pre>
+                    </li>
+                    <li>
+                      Copy <strong>Client ID</strong> and <strong>Client secret</strong> into{" "}
+                      <code>.env</code>:
+                      <pre className="mt-2 p-2 rounded bg-surface text-xs overflow-x-auto">{`GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."`}</pre>
+                    </li>
+                    <li>
+                      Restart <code>npm run dev:all</code>, then click Connect Google Calendar
+                      below
+                    </li>
+                  </ol>
+                </div>
+              ) : (
+                <a
+                  href="/api/integrations/google"
+                  className="inline-block px-4 py-2 text-sm btn-primary rounded-md"
+                >
+                  Connect Google Calendar
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-muted">
+                Blaze will create tentative calendar holds when it detects meetings in your
+                notes and transcripts.
+              </p>
+              <a
+                href="/api/integrations/google"
+                className="inline-block text-sm text-link hover:underline"
+              >
+                Reconnect Google Calendar
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="card p-4">
@@ -296,12 +514,53 @@ SLACK_SIGNING_SECRET="..."`}</pre>
             </span>
           </div>
           {!status.github ? (
-            <a
-              href="/api/integrations/github"
-              className="inline-block mt-3 px-4 py-2 text-sm btn-primary rounded-md"
-            >
-              Connect GitHub
-            </a>
+            <div className="mt-4 space-y-3">
+              {!status.githubConfigured ? (
+                <div className="text-sm space-y-3 card p-4 bg-surface-muted/30">
+                  <p className="font-medium">Set up GitHub OAuth (one-time)</p>
+                  <ol className="list-decimal pl-5 space-y-2 text-muted">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://github.com/settings/developers"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-link hover:underline"
+                      >
+                        GitHub → Settings → Developer settings → OAuth Apps
+                      </a>{" "}
+                      → <strong>New OAuth App</strong>
+                    </li>
+                    <li>
+                      <strong>Homepage URL:</strong>{" "}
+                      <code className="text-xs">{status.appUrl}</code>
+                    </li>
+                    <li>
+                      <strong>Authorization callback URL:</strong>{" "}
+                      <code className="text-xs break-all">{githubCallbackUrl}</code>
+                    </li>
+                    <li>
+                      Copy <strong>Client ID</strong> and generate a{" "}
+                      <strong>Client secret</strong> into <code>.env</code>:
+                      <pre className="mt-2 text-xs bg-surface p-2 rounded overflow-x-auto">{`GITHUB_CLIENT_ID="your-client-id"
+GITHUB_CLIENT_SECRET="your-client-secret"`}</pre>
+                    </li>
+                    <li>
+                      Restart <code>npm run dev:all</code>, then click Connect GitHub below.
+                    </li>
+                  </ol>
+                </div>
+              ) : null}
+              <a
+                href="/api/integrations/github"
+                className={`inline-block px-4 py-2 text-sm rounded-md ${
+                  status.githubConfigured ? "btn-primary" : "btn-secondary opacity-50 pointer-events-none"
+                }`}
+                aria-disabled={!status.githubConfigured}
+              >
+                Connect GitHub
+              </a>
+            </div>
           ) : (
             <div className="mt-4 space-y-2">
               <label className="flex items-center justify-between text-sm">
@@ -362,7 +621,16 @@ SLACK_SIGNING_SECRET="..."`}</pre>
         </div>
 
         <div className="card p-4">
-          <h2 className="font-medium">Agent autonomy</h2>
+          <h2 className="font-medium">Local repos (coding handoffs)</h2>
+          <p className="text-sm text-muted mt-1">
+            Map GitHub repos to local checkouts. Handoffs are written into{" "}
+            <code className="text-xs">.blaze/handoffs/</code> inside that repo and Cursor opens
+            the mapped workspace.
+          </p>
+          <RepoWorkspaceSettings />
+        </div>
+
+        <div className="card p-4">
           <ul className="text-sm space-y-2 mt-3">
             <li className="flex justify-between">
               <span>GitHub mention ack comments</span>

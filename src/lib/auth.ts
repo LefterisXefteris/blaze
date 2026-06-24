@@ -1,6 +1,13 @@
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
+import { cookies } from "next/headers";
+import { google } from "googleapis";
 import { db } from "@/lib/db";
-import { createClient } from "@/lib/supabase/server";
+import {
+  getAccessTokenFromCookies,
+  profileFromClaims,
+  signAccessToken,
+  verifyAccessToken,
+} from "@/lib/session";
 
 export type AppUser = {
   id: string;
@@ -13,22 +20,9 @@ export type AppSession = {
   user: AppUser;
 };
 
-function profileFromSupabaseUser(user: SupabaseUser) {
-  const meta = user.user_metadata ?? {};
-  return {
-    id: user.id,
-    email: user.email ?? null,
-    name:
-      (meta.full_name as string | undefined) ??
-      (meta.name as string | undefined) ??
-      null,
-    image: (meta.avatar_url as string | undefined) ?? null,
-  };
-}
+export type UserProfile = AppUser;
 
-export async function ensureDbUser(user: SupabaseUser) {
-  const profile = profileFromSupabaseUser(user);
-
+export async function ensureDbUser(profile: UserProfile) {
   return db.user.upsert({
     where: { id: profile.id },
     create: profile,
@@ -67,56 +61,123 @@ export async function syncGoogleTokens(
     },
     update: {
       accessToken: session.provider_token,
-      refreshToken: session.provider_refresh_token ?? undefined,
+      ...(session.provider_refresh_token
+        ? { refreshToken: session.provider_refresh_token }
+        : {}),
       expiresAt,
     },
   });
 }
 
 export async function auth(): Promise<AppSession | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const cookieStore = await cookies();
+  const token = getAccessTokenFromCookies(cookieStore);
+  if (!token) return null;
 
-  if (!user) return null;
+  try {
+    const claims = await verifyAccessToken(token);
+    const profile = profileFromClaims(claims);
+    const dbUser = await ensureDbUser(profile);
+    return {
+      user: {
+        id: dbUser.id,
+        name: dbUser.name,
+        email: dbUser.email,
+        image: dbUser.image,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 
-  const dbUser = await ensureDbUser(user);
-
-  return {
-    user: {
-      id: dbUser.id,
-      name: dbUser.name,
-      email: dbUser.email,
-      image: dbUser.image,
-    },
-  };
+export function googleOAuthConfigured() {
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID?.trim() &&
+      process.env.GOOGLE_CLIENT_SECRET?.trim()
+  );
 }
 
 export async function signInWithGoogle(redirectTo: string) {
-  const supabase = await createClient();
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth is not configured");
+  }
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo,
-      scopes:
-        "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectTo);
+  return oauth2.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/calendar.events",
+    ],
+    state: Buffer.from(JSON.stringify({ next: "/notes" })).toString("base64url"),
+  });
+}
+
+export async function completeGoogleOAuth(code: string) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth is not configured");
+  }
+
+  const redirectUri = `${appOrigin()}/auth/callback`;
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  const { tokens } = await oauth2.getToken(code);
+  oauth2.setCredentials(tokens);
+
+  const oauth2Api = google.oauth2({ version: "v2", auth: oauth2 });
+  const { data: googleUser } = await oauth2Api.userinfo.get();
+  if (!googleUser.email) {
+    throw new Error("Google account has no email");
+  }
+
+  let dbUser = await db.user.findUnique({ where: { email: googleUser.email } });
+  if (!dbUser) {
+    dbUser = await db.user.create({
+      data: {
+        id: randomUUID(),
+        email: googleUser.email,
+        name: googleUser.name ?? null,
+        image: googleUser.picture ?? null,
       },
-    },
+    });
+  } else {
+    dbUser = await db.user.update({
+      where: { id: dbUser.id },
+      data: {
+        name: googleUser.name ?? dbUser.name,
+        image: googleUser.picture ?? dbUser.image,
+      },
+    });
+  }
+
+  await syncGoogleTokens(dbUser.id, {
+    provider_token: tokens.access_token,
+    provider_refresh_token: tokens.refresh_token,
+    expires_in: tokens.expiry_date
+      ? Math.floor((tokens.expiry_date - Date.now()) / 1000)
+      : null,
   });
 
-  if (error) throw error;
-  return data.url;
+  const accessToken = await signAccessToken({
+    id: dbUser.id,
+    email: dbUser.email,
+    name: dbUser.name,
+    image: dbUser.image,
+  });
+
+  return { dbUser, accessToken };
 }
 
 export function appOrigin() {
   return (
     process.env.NEXT_PUBLIC_APP_URL ??
     process.env.AUTH_URL ??
-    "http://localhost:3000"
+    "http://localhost:3010"
   );
 }

@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,13 +18,19 @@ def normalize_async_database_url(url: str) -> str:
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
 
-    parsed = urlparse(url)
+    # Avoid urlparse — Python 3.14 rejects [] in host/password as invalid IPv6.
+    base, sep, query_str = url.partition("?")
+    if not sep:
+        return base
+
     query = [
         (key, value)
-        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        for key, value in parse_qsl(query_str, keep_blank_values=True)
         if key not in _ASYNCPG_DROP_QUERY_PARAMS
     ]
-    return urlunparse(parsed._replace(query=urlencode(query)))
+    if not query:
+        return base
+    return f"{base}?{urlencode(query)}"
 
 
 class Settings(BaseSettings):
@@ -36,13 +42,9 @@ class Settings(BaseSettings):
 
     database_url: str
     direct_url: str | None = None
+    jwt_secret: str
 
-    supabase_url: str
-    supabase_anon_key: str
-    supabase_service_role_key: str | None = None
-    supabase_jwt_secret: str | None = None
-
-    app_url: str = "http://localhost:3000"
+    app_url: str = "http://localhost:3010"
     redis_url: str | None = None
 
     google_client_id: str | None = None
@@ -57,12 +59,17 @@ class Settings(BaseSettings):
     slack_signing_secret: str | None = None
 
     openai_api_key: str | None = None
+    elevenlabs_api_key: str | None = None
     dev_demo_login: bool = False
     blaze_handoff_dir: str | None = None
     blaze_cursor_handoff: str = "auto"
     blaze_cursor_rules: bool = True
 
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    cors_origins: list[str] = [
+        "http://localhost:3010",
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
 
     @property
     def async_database_url(self) -> str:
@@ -73,19 +80,17 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     import os
 
+    jwt_secret = os.environ.get("BLAZE_JWT_SECRET")
+    if not jwt_secret:
+        raise RuntimeError("BLAZE_JWT_SECRET is required in .env")
+
     return Settings(
         database_url=os.environ["DATABASE_URL"],
-        supabase_url=os.environ.get(
-            "NEXT_PUBLIC_SUPABASE_URL", os.environ.get("SUPABASE_URL", "")
-        ),
-        supabase_anon_key=os.environ.get(
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY", os.environ.get("SUPABASE_ANON_KEY", "")
-        ),
-        supabase_service_role_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY"),
-        supabase_jwt_secret=os.environ.get("SUPABASE_JWT_SECRET"),
-        app_url=os.environ.get("NEXT_PUBLIC_APP_URL", os.environ.get("AUTH_URL", "http://localhost:3000")),
+        jwt_secret=jwt_secret,
+        app_url=os.environ.get("NEXT_PUBLIC_APP_URL", os.environ.get("AUTH_URL", "http://localhost:3010")),
         cors_origins=[
-            os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
+            os.environ.get("NEXT_PUBLIC_APP_URL", "http://localhost:3010"),
+            "http://localhost:3010",
             "http://localhost:3000",
             "http://localhost:3001",
         ],
@@ -99,6 +104,7 @@ def get_settings() -> Settings:
         slack_client_secret=os.environ.get("SLACK_CLIENT_SECRET"),
         slack_signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
         openai_api_key=os.environ.get("OPENAI_API_KEY"),
+        elevenlabs_api_key=os.environ.get("ELEVENLABS_API_KEY"),
         dev_demo_login=os.environ.get("DEV_DEMO_LOGIN", "").lower() == "true",
         blaze_handoff_dir=os.environ.get("BLAZE_HANDOFF_DIR"),
         blaze_cursor_handoff=os.environ.get("BLAZE_CURSOR_HANDOFF", "auto"),

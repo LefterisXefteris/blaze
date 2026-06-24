@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -10,6 +11,8 @@ pub struct DesktopConfig {
     pub app_url: String,
     pub access_token: Option<String>,
     pub handoff_dir: Option<String>,
+    #[serde(default)]
+    pub repo_workspaces: HashMap<String, String>,
     pub cursor_handoff: String,
     pub cursor_rules: bool,
     pub poll_interval_secs: u64,
@@ -20,9 +23,10 @@ impl Default for DesktopConfig {
     fn default() -> Self {
         Self {
             api_url: "http://127.0.0.1:8000".to_string(),
-            app_url: "http://localhost:3000".to_string(),
+            app_url: "http://localhost:3010/notes".to_string(),
             access_token: None,
             handoff_dir: None,
+            repo_workspaces: HashMap::new(),
             cursor_handoff: "auto".to_string(),
             cursor_rules: true,
             poll_interval_secs: 30,
@@ -40,24 +44,107 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("blaze-desktop.json"))
 }
 
+fn blaze_env_file_paths() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.env"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../.env"),
+    ]
+}
+
+fn read_env_key(key: &str) -> Option<String> {
+    for path in blaze_env_file_paths() {
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let prefix = format!("{key}=");
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with(&prefix) || trimmed.starts_with('#') {
+                continue;
+            }
+            let raw = trimmed[prefix.len()..].trim();
+            let value = raw
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .or_else(|| raw.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+                .unwrap_or(raw)
+                .trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn notes_url_from_app_base(base: &str) -> String {
+    let base = base.trim().trim_end_matches('/');
+    if base.ends_with("/notes") {
+        base.to_string()
+    } else {
+        format!("{base}/notes")
+    }
+}
+
+fn apply_repo_env(mut config: DesktopConfig) -> DesktopConfig {
+    if let Some(url) = read_env_key("NEXT_PUBLIC_APP_URL") {
+        config.app_url = notes_url_from_app_base(&url);
+    }
+    if let Some(api) = read_env_key("API_URL") {
+        config.api_url = api;
+    }
+    config
+}
+
+fn normalize_config(mut config: DesktopConfig) -> DesktopConfig {
+    // Port 3000 is commonly Grafana/docker — Blaze dev runs on 3010.
+    if config.app_url.contains("localhost:3000") || config.app_url.contains("127.0.0.1:3000") {
+        config.app_url = config
+            .app_url
+            .replace("localhost:3000", "localhost:3010")
+            .replace("127.0.0.1:3000", "127.0.0.1:3010");
+    }
+
+    if config.app_url.trim().is_empty() {
+        config.app_url = DesktopConfig::default().app_url;
+    }
+
+    apply_repo_env(config)
+}
+
+pub fn blaze_notes_url(config: &DesktopConfig) -> String {
+    notes_url_from_app_base(&apply_repo_env(config.clone()).app_url)
+}
+
 pub fn load_config(app: &AppHandle) -> DesktopConfig {
     let path = match config_path(app) {
         Ok(path) => path,
-        Err(_) => return DesktopConfig::default(),
+        Err(_) => return normalize_config(DesktopConfig::default()),
     };
 
     if !path.exists() {
-        return DesktopConfig::default();
+        let config = normalize_config(DesktopConfig::default());
+        let _ = save_config(app, &config);
+        return config;
     }
 
-    match fs::read_to_string(&path) {
+    let loaded: DesktopConfig = match fs::read_to_string(&path) {
         Ok(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         Err(_) => DesktopConfig::default(),
+    };
+
+    let before_app_url = loaded.app_url.clone();
+    let before_api_url = loaded.api_url.clone();
+    let normalized = normalize_config(loaded);
+    if normalized.app_url != before_app_url || normalized.api_url != before_api_url {
+        let _ = save_config(app, &normalized);
     }
+    normalized
 }
 
 pub fn save_config(app: &AppHandle, config: &DesktopConfig) -> Result<(), String> {
     let path = config_path(app)?;
-    let raw = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    let normalized = normalize_config(config.clone());
+    let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
     fs::write(path, raw).map_err(|e| e.to_string())
 }

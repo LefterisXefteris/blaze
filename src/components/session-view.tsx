@@ -401,7 +401,11 @@ export function SessionView({ sessionId }: { sessionId: string }) {
 
       {isMeetingCapture && isActive ? (
         <div className="space-y-6">
-          <LiveMicCapture sessionId={sessionId} onTranscript={fetchSession} />
+          <LiveMicCapture
+            sessionId={sessionId}
+            onTranscript={fetchSession}
+            autoStart={session.sourceType === "SLACK"}
+          />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <LiveNotesPanel liveSummary={liveSummary} isRecording={isActive} />
             <RelatedContextPanel relatedContext={relatedContext} />

@@ -27,8 +27,8 @@ APPROVE_PREFIX = "blaze_approve"
 REJECT_PREFIX = "blaze_reject"
 LIVE_NOTES_MIN_INTERVAL_SEC = 30
 LIVE_NOTES_PLACEHOLDER = (
-    "_Taking notes… type in this thread and Blaze will summarize key points, "
-    "decisions, and action items here._"
+    "_Taking notes… type in this thread or open Blaze for voice capture — "
+    "Blaze will summarize key points, decisions, and action items here._"
 )
 APPROVAL_COMMAND = re.compile(
     r"^blaze\s+(approve|dismiss|reject)(?:\s+([a-f0-9]{6,24}))?$",

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function ConfirmQueuePage() {
+export default function ConfirmPage() {
   redirect("/notes");
 }

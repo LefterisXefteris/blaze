@@ -54,6 +54,7 @@ def write_cursor_rules_snippet(handoff_path: Path, repo_root: Path | None) -> di
                 f"`{label}`",
                 "",
                 "Read that file fully (issue context, notes, transcript) before making changes.",
+                "Work in this repository — not in the Blaze app checkout.",
                 "When done, summarize what you changed and whether a GitHub comment or PR is needed.",
                 "",
             ]
@@ -63,7 +64,10 @@ def write_cursor_rules_snippet(handoff_path: Path, repo_root: Path | None) -> di
     return {"written": True, "path": str(rules_file.resolve())}
 
 
-def open_handoff_in_cursor(handoff_path: Path) -> dict[str, Any]:
+def open_handoff_in_cursor(
+    handoff_path: Path,
+    workspace_root: Path | None = None,
+) -> dict[str, Any]:
     settings = get_settings()
     mode = (settings.blaze_cursor_handoff or "auto").lower()
     if mode == "off":
@@ -72,6 +76,18 @@ def open_handoff_in_cursor(handoff_path: Path) -> dict[str, Any]:
     resolved = handoff_path.resolve()
     errors: list[str] = []
     cursor_bin = shutil.which("cursor")
+
+    if cursor_bin and workspace_root and mode in ("auto", "add", "open"):
+        try:
+            subprocess.run(
+                [cursor_bin, str(workspace_root.resolve())],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except Exception as error:
+            errors.append(f"cursor workspace: {error}")
 
     if cursor_bin and mode in ("auto", "add"):
         try:
@@ -82,7 +98,13 @@ def open_handoff_in_cursor(handoff_path: Path) -> dict[str, Any]:
                 text=True,
                 timeout=15,
             )
-            return {"opened": True, "method": "cursor --add", "path": str(resolved)}
+            method = "cursor workspace + --add" if workspace_root else "cursor --add"
+            return {
+                "opened": True,
+                "method": method,
+                "path": str(resolved),
+                "workspace": str(workspace_root.resolve()) if workspace_root else None,
+            }
         except Exception as error:
             errors.append(f"cursor --add: {error}")
 
@@ -102,8 +124,16 @@ def open_handoff_in_cursor(handoff_path: Path) -> dict[str, Any]:
     return {"opened": False, "path": str(resolved), "errors": errors}
 
 
-def deliver_handoff_to_cursor(handoff_path: Path) -> dict[str, Any]:
-    repo_root = find_git_root(handoff_path.parent)
-    rules = write_cursor_rules_snippet(handoff_path, repo_root)
-    opened = open_handoff_in_cursor(handoff_path)
-    return {"rules": rules, "cursor": opened, "repoRoot": str(repo_root) if repo_root else None}
+def deliver_handoff_to_cursor(
+    handoff_path: Path,
+    workspace_root: Path | None = None,
+) -> dict[str, Any]:
+    rules_root = workspace_root or find_git_root(handoff_path.parent)
+    rules = write_cursor_rules_snippet(handoff_path, rules_root)
+    opened = open_handoff_in_cursor(handoff_path, workspace_root)
+    return {
+        "rules": rules,
+        "cursor": opened,
+        "repoRoot": str(rules_root) if rules_root else None,
+        "workspaceRoot": str(workspace_root.resolve()) if workspace_root else None,
+    }

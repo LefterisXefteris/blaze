@@ -1,4 +1,4 @@
--- Enable pgvector (Supabase has this; local Docker uses pgvector/pgvector image)
+-- Enable pgvector (local Docker uses pgvector/pgvector image)
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- CreateEnum

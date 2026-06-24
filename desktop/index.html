@@ -22,7 +22,7 @@
       <section class="card">
         <h2>Quick actions</h2>
         <div class="actions">
-          <button type="button" id="open-blaze" class="btn primary">Open Blaze</button>
+          <button type="button" id="open-blaze" class="btn primary">Open notepad</button>
           <button type="button" id="poll-now" class="btn secondary">Deliver handoffs now</button>
         </div>
         <p id="status" class="status">Ready</p>
@@ -31,21 +31,30 @@
 
       <section class="card">
         <h2>Connection</h2>
+        <div class="connection-row">
+          <span id="connection-pill" class="pill muted">Checking…</span>
+          <button type="button" id="sync-auth" class="btn secondary compact">
+            Sync from login
+          </button>
+        </div>
+        <p id="connection-message" class="hint connection-message">
+          Log into Blaze in the notepad window — desktop picks up your session automatically.
+        </p>
         <form id="settings-form">
           <label>
             <span>Blaze app URL</span>
-            <input id="app-url" type="url" placeholder="http://localhost:3000" />
+            <input id="app-url" type="url" placeholder="http://localhost:3010" />
           </label>
           <label>
             <span>API URL (FastAPI)</span>
             <input id="api-url" type="url" placeholder="http://127.0.0.1:8000" />
           </label>
           <label>
-            <span>Access token (Supabase JWT)</span>
+            <span>Access token (optional override)</span>
             <input
               id="access-token"
               type="password"
-              placeholder="Paste from browser after logging into Blaze"
+              placeholder="Auto-synced after you log in via the notepad"
               autocomplete="off"
             />
           </label>
@@ -54,8 +63,16 @@
             <input
               id="handoff-dir"
               type="text"
-              placeholder="Default: nearest git repo /.blaze/handoffs"
+              placeholder="Default: mapped repo /.blaze/handoffs or nearest git repo"
             />
+          </label>
+          <label>
+            <span>Repo workspaces (JSON)</span>
+            <textarea
+              id="repo-workspaces"
+              rows="4"
+              placeholder='{"ClickHouse/ClickHouse": "/Users/you/projects/ClickHouse"}'
+            ></textarea>
           </label>
           <div class="row">
             <label class="checkbox">
@@ -74,15 +91,14 @@
       <section class="card muted-card">
         <h2>How it works</h2>
         <ol>
-          <li>Run Blaze web + API locally (or point at production).</li>
-          <li>Log in via <strong>Open Blaze</strong> and approve a handoff action.</li>
-          <li>Desktop polls for confirmed handoffs and writes them locally.</li>
-          <li>Cursor opens with the handoff file + rules snippet.</li>
+          <li>Run Blaze web + API locally (<code>npm run dev:all</code> from repo root).</li>
+          <li>Log in via <strong>Open notepad</strong> — desktop syncs your session automatically.</li>
+          <li>Approve a handoff action in Blaze.</li>
+          <li>Desktop delivers the handoff file and opens Cursor.</li>
         </ol>
         <p class="hint">
-          Get your access token: log into Blaze in the browser, open DevTools →
-          Application → Cookies → copy the Supabase <code>access_token</code> from the
-          auth cookie, or use the JWT from your session.
+          API defaults to <code>http://127.0.0.1:8000</code> and the app to{" "}
+          <code>http://localhost:3010/notes</code>. Override below only if your setup differs.
         </p>
       </section>
     </main>

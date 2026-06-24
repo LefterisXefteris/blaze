@@ -4,7 +4,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import actions, context, integrations, meetings, notes, priority, recipes, search, sessions, slack
+from app.routers import (
+    actions,
+    context,
+    integrations,
+    local,
+    meetings,
+    notes,
+    priority,
+    recipes,
+    search,
+    sessions,
+    slack,
+    transcription,
+)
 
 
 @asynccontextmanager
@@ -34,7 +47,9 @@ def create_app() -> FastAPI:
     app.include_router(meetings.router)
     app.include_router(context.router)
     app.include_router(integrations.router)
+    app.include_router(local.router)
     app.include_router(slack.router)
+    app.include_router(transcription.router)
 
     @app.get("/health")
     async def health():

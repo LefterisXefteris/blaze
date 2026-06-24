@@ -1,5 +1,7 @@
 use crate::config::DesktopConfig;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,6 +13,7 @@ pub struct DeliveryResult {
     pub cursor: CursorOpenResult,
     pub cursor_rules: CursorRulesResult,
     pub repo_root: Option<String>,
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,8 +77,10 @@ fn slugify(text: &str) -> String {
     }
 }
 
-fn handoff_dir(config: &DesktopConfig) -> Result<PathBuf, String> {
-    let path = if let Some(raw) = &config.handoff_dir {
+fn handoff_dir(config: &DesktopConfig, workspace: Option<&Path>) -> Result<PathBuf, String> {
+    let path = if let Some(root) = workspace {
+        root.join(".blaze").join("handoffs")
+    } else if let Some(raw) = &config.handoff_dir {
         PathBuf::from(raw)
     } else if let Some(git_root) = find_git_root(None) {
         git_root.join(".blaze").join("handoffs")
@@ -88,6 +93,40 @@ fn handoff_dir(config: &DesktopConfig) -> Result<PathBuf, String> {
 
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     Ok(path)
+}
+
+fn load_repo_workspaces_file() -> HashMap<String, String> {
+    let path = dirs::home_dir()
+        .map(|home| home.join(".blaze").join("repos.json"))
+        .filter(|p| p.exists());
+
+    let Some(path) = path else {
+        return HashMap::new();
+    };
+
+    let Ok(raw) = fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn resolve_repo_workspace(repo: Option<&str>, config: &DesktopConfig) -> Option<PathBuf> {
+    let repo = repo?.trim();
+    if repo.is_empty() {
+        return None;
+    }
+
+    let mut candidates = load_repo_workspaces_file();
+    candidates.extend(config.repo_workspaces.clone());
+
+    let path_str = candidates.get(repo)?;
+    let path = PathBuf::from(path_str);
+    if path.is_dir() {
+        path.canonicalize().ok().or(Some(path))
+    } else {
+        None
+    }
 }
 
 fn handoff_path_label(handoff_path: &Path, repo_root: Option<&Path>) -> String {
@@ -153,7 +192,11 @@ fn write_cursor_rules_snippet(
     }
 }
 
-fn open_handoff_in_cursor(handoff_path: &Path, mode: &str) -> CursorOpenResult {
+fn open_handoff_in_cursor(
+    handoff_path: &Path,
+    workspace_root: Option<&Path>,
+    mode: &str,
+) -> CursorOpenResult {
     if mode == "off" {
         return CursorOpenResult {
             opened: false,
@@ -169,15 +212,38 @@ fn open_handoff_in_cursor(handoff_path: &Path, mode: &str) -> CursorOpenResult {
         .unwrap_or_else(|_| handoff_path.to_path_buf());
     let mut errors: Vec<String> = Vec::new();
 
+    if mode == "auto" || mode == "add" || mode == "open" {
+        if let Some(workspace) = workspace_root {
+            if let Ok(output) = Command::new("cursor")
+                .arg(workspace.to_string_lossy().as_ref())
+                .output()
+            {
+                if !output.status.success() {
+                    errors.push(format!(
+                        "cursor workspace: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
+                }
+            } else {
+                errors.push("cursor workspace: cursor CLI not found".to_string());
+            }
+        }
+    }
+
     if mode == "auto" || mode == "add" {
         if let Ok(output) = Command::new("cursor")
             .args(["--add", resolved.to_string_lossy().as_ref()])
             .output()
         {
             if output.status.success() {
+                let method = if workspace_root.is_some() {
+                    "cursor workspace + --add".to_string()
+                } else {
+                    "cursor --add".to_string()
+                };
                 return CursorOpenResult {
                     opened: true,
-                    method: Some("cursor --add".to_string()),
+                    method: Some(method),
                     skipped: None,
                     reason: None,
                     errors: None,
@@ -226,24 +292,31 @@ pub fn deliver_handoff_markdown(
     markdown: &str,
     action_id: &str,
     external_id: Option<&str>,
+    github_repo: Option<&str>,
     config: &DesktopConfig,
 ) -> Result<DeliveryResult, String> {
     let slug_source = external_id.unwrap_or(action_id);
     let filename = format!("{}-{}.md", slugify(slug_source), &action_id[..action_id.len().min(8)]);
-    let dir = handoff_dir(config)?;
+    let workspace = resolve_repo_workspace(github_repo, config);
+    let dir = handoff_dir(config, workspace.as_deref())?;
     let path = dir.join(&filename);
 
     std::fs::write(&path, markdown).map_err(|e| e.to_string())?;
 
-    let repo_root = find_git_root(Some(&dir));
-    let rules = write_cursor_rules_snippet(&path, repo_root.as_deref(), config.cursor_rules);
-    let cursor = open_handoff_in_cursor(&path, &config.cursor_handoff);
+    let git_root = find_git_root(Some(&dir));
+    let rules_root = workspace.as_deref().or(git_root.as_deref());
+    let rules = write_cursor_rules_snippet(&path, rules_root, config.cursor_rules);
+    let cursor = open_handoff_in_cursor(&path, workspace.as_deref(), &config.cursor_handoff);
 
     Ok(DeliveryResult {
-        path: path.canonicalize().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| path.to_string_lossy().to_string()),
+        path: path
+            .canonicalize()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| path.to_string_lossy().to_string()),
         filename,
         cursor,
         cursor_rules: rules,
-        repo_root: repo_root.map(|p| p.to_string_lossy().to_string()),
+        repo_root: rules_root.map(|p| p.to_string_lossy().to_string()),
+        workspace_root: workspace.map(|p| p.to_string_lossy().to_string()),
     })
 }

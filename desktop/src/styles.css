@@ -180,6 +180,64 @@ ol li + li {
   color: #71717a;
 }
 
+.connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.connection-message {
+  margin: 0 0 14px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.pill.ok {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.pill.warn {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.pill.error {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.pill.muted {
+  background: #27272a;
+  color: #a1a1aa;
+}
+
+.btn.compact {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #3f3f46;
+  background: #09090b;
+  color: #f4f4f5;
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

@@ -9,7 +9,10 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models import PriorityItem
-from app.services.vector.entities import detect_entity_matches
+from app.services.vector.entities import (
+    detect_entity_matches,
+    find_priority_by_text_keywords,
+)
 from app.services.vector.search import semantic_search
 from app.types import ContextHit
 from app.utils import parse_manual_transcript
@@ -196,7 +199,23 @@ async def match_transcript_to_priorities(user_id: str, text: str) -> list[Transc
         if item:
             _merge_match(matches, item, hit.similarity, hit.linkReason)
 
-    chunks = split_transcript_chunks(text)
+    keyword_hits = await find_priority_by_text_keywords(user_id, text)
+    text_chunk = split_transcript_chunks(text)
+    excerpt_chunk = text_chunk[0] if text_chunk else None
+    for hit in keyword_hits:
+        item = await _resolve_hit_to_priority(
+            hit, items_by_id, items_by_external, items_by_session
+        )
+        if item:
+            _merge_match(
+                matches,
+                item,
+                hit.similarity,
+                hit.linkReason,
+                excerpt_chunk,
+            )
+
+    chunks = text_chunk
     for chunk in chunks:
         if len(chunk.text.strip()) < 20:
             continue

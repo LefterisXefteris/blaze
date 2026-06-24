@@ -8,14 +8,14 @@ Tauri companion app for the Blaze monorepo. It wraps the Blaze web UI and owns *
 ┌─────────────────────────────────────────────────────────┐
 │  Blaze Desktop (this app)                               │
 │  ┌─────────────────┐   ┌──────────────────────────────┐ │
-│  │ Shell UI :1420  │   │ Blaze window (WebView)       │ │
-│  │ settings, tray  │   │ → localhost:3000 or prod URL │ │
+│  │ Shell UI :1420  │   │ Notepad window (WebView)     │ │
+│  │ settings, tray  │   │ → /notes on localhost:3010   │ │
 │  └────────┬────────┘   └──────────────────────────────┘ │
 │           │ Rust: poll API, write handoff, open Cursor  │
 └───────────┼─────────────────────────────────────────────┘
             │ Bearer JWT
 ┌───────────▼─────────────────────────────────────────────┐
-│  FastAPI (:8000)  +  Next.js (:3000)  +  Postgres        │
+│  FastAPI (:8000)  +  Next.js (:3010)  +  Postgres        │
 └───────────────────────────────────────────────────────────┘
 ```
 
@@ -23,7 +23,7 @@ Tauri companion app for the Blaze monorepo. It wraps the Blaze web UI and owns *
 
 | Layer | Role |
 |-------|------|
-| **Next.js** | Full Blaze UI (notes, inbox, sessions, approvals) |
+| **Next.js** | Notepad-first UI (`/notes`), inbox, sessions, approvals |
 | **FastAPI** | API, agents, Slack/GitHub, handoff markdown generation |
 | **Desktop** | Poll confirmed handoffs, write `.blaze/handoffs/`, open Cursor, drop `.cursor/rules` |
 
@@ -43,6 +43,8 @@ Tauri companion app for the Blaze monorepo. It wraps the Blaze web UI and owns *
 
 ## Setup
 
+From the [repo root README](../README.md): clone Blaze, copy `.env.example` → `.env`, add your own API keys (none are bundled), run `npm run db:setup`, then start the API and web app.
+
 ```bash
 # From repo root — install desktop deps
 cd desktop
@@ -58,22 +60,22 @@ npm run dev              # from repo root
 npm run tauri:dev        # from desktop/
 ```
 
-On first launch:
+On first launch the **notepad** opens automatically. Use the tray menu for **Desktop settings** (API URL, handoff paths).
 
-1. Open **Blaze** from the desktop app and log in.
-2. In desktop **Settings**, paste your Supabase **access token** (see below).
-3. Set **API URL** (`http://127.0.0.1:8000`) and **App URL** (`http://localhost:3000`).
-4. Save settings.
+1. Run `npm run dev:all` from the repo root (API + web).
+2. Log in from the notepad window (demo or Google).
+3. Desktop **auto-syncs your session** from the notepad cookies — no manual token copy needed.
+4. Open **Desktop settings** from the tray to verify the connection pill shows **Connected**.
 
-### Getting an access token
+### Manual token override
 
-After logging into Blaze in the browser:
+If auto-sync fails, paste a JWT in Desktop settings. After logging into Blaze in a normal browser:
 
 1. Open DevTools → Application → Cookies.
-2. Find the Supabase auth cookie (`sb-*-auth-token`).
-3. Copy the `access_token` value from the decoded session JSON.
+2. Find the `blaze-auth-token` cookie.
+3. Copy the `access_token` from the decoded session JSON.
 
-Or use a JWT from your Supabase project for the logged-in user.
+Treat this token like a password — do not commit it or share it in screenshots.
 
 ## Scripts
 
@@ -97,18 +99,21 @@ Stored in the OS app config directory as `blaze-desktop.json`:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `apiUrl` | `http://127.0.0.1:8000` | FastAPI base URL |
-| `appUrl` | `http://localhost:3000` | Blaze web UI URL |
-| `accessToken` | — | Supabase JWT for API calls |
-| `handoffDir` | nearest `/.blaze/handoffs` | Override handoff output path |
+| `appUrl` | `http://localhost:3010/notes` | Blaze web UI base URL (opens `/notes`) |
+| `accessToken` | — | Blaze session JWT for API calls |
+| `handoffDir` | mapped repo `/.blaze/handoffs` | Override handoff output path |
+| `repoWorkspaces` | — | GitHub repo → local path (also reads `~/.blaze/repos.json`) |
 | `cursorRules` | `true` | Write `.cursor/rules/blaze-handoff.mdc` |
 | `pollIntervalSecs` | `30` | Background poll interval (min 15) |
 
 ## System tray
 
-- **Open Blaze** — focus the web window
+- **Open notepad** — focus the notes window
 - **Deliver handoffs now** — poll immediately
-- **Desktop settings** — show the shell window
+- **Desktop settings** — show the shell window (token, API URL)
 - **Quit**
+
+Tray left-click also opens the notepad.
 
 ## Production use
 
@@ -121,6 +126,7 @@ Set `BLAZE_CURSOR_HANDOFF=off` on the **server** so it doesn't try (and fail) to
 
 ## Roadmap
 
+- [x] Auto-sync session from notepad webview cookies
 - [ ] OAuth PKCE in desktop shell (no manual token paste)
 - [ ] Native notifications for pending handoff actions
 - [ ] Auto-run note_agent on Slack transcript chunks

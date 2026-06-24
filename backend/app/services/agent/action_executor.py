@@ -322,6 +322,8 @@ async def confirm_action(
                     "type": "coding_handoff",
                     "path": handoff.get("path"),
                     "filename": handoff.get("filename"),
+                    "workspaceRoot": handoff.get("workspacePath")
+                    or (handoff.get("cursorDelivery") or {}).get("workspaceRoot"),
                     "status": "ready",
                 }
                 cursor_delivery = handoff.get("cursorDelivery")

@@ -758,8 +758,7 @@ export function NotesEditor() {
 
   const sortedInbox = [...priorityItems].sort((a, b) => a.priority - b.priority);
   const hasNoteContent = Boolean(content.trim());
-  const showMatchedSection =
-    matchedIssues.length > 0 || (hasNoteContent && (matching || analyzing));
+  const showMatchedSection = hasNoteContent;
 
   useEffect(() => {
     if (pendingActionCount > 0) setSidebarOpen(true);

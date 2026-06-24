@@ -85,6 +85,12 @@ export function ActionCard({
     action.result?.type === "coding_handoff" && action.result?.path
       ? String(action.result.path)
       : null;
+  const workspacePath =
+    action.result?.type === "coding_handoff" && action.result?.workspaceRoot
+      ? String(action.result.workspaceRoot)
+      : action.result?.type === "coding_handoff" && action.result?.cursorDelivery?.workspaceRoot
+        ? String(action.result.cursorDelivery.workspaceRoot)
+        : null;
 
   const cursorOpened =
     action.result?.type === "coding_handoff" && action.result?.cursor?.opened;
@@ -158,6 +164,11 @@ export function ActionCard({
           {handoffPath && (
             <p className="text-xs text-muted mt-2 font-mono break-all">
               Handoff: {handoffPath}
+            </p>
+          )}
+          {workspacePath && (
+            <p className="text-xs text-muted mt-1 font-mono break-all">
+              Workspace: {workspacePath}
             </p>
           )}
           {cursorOpened && cursorMethod && (

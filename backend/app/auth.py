@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 import jwt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -33,7 +32,7 @@ def _decode_base64url(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def _parse_supabase_session(raw: str) -> dict[str, Any] | list[Any] | None:
+def _parse_session_cookie(raw: str) -> dict[str, Any] | list[Any] | None:
     try:
         if raw.startswith("base64-"):
             decoded = _decode_base64url(raw[7:]).decode("utf-8")
@@ -64,7 +63,7 @@ def _extract_access_token(request: Request) -> str | None:
     auth_cookies.sort(key=lambda item: item[0])
     combined = "".join(value for _, value in auth_cookies)
 
-    session = _parse_supabase_session(combined)
+    session = _parse_session_cookie(combined)
     if not session:
         return None
 
@@ -76,31 +75,20 @@ def _extract_access_token(request: Request) -> str | None:
     return None
 
 
-async def _verify_token(token: str) -> dict[str, Any]:
+def _verify_token(token: str) -> dict[str, Any]:
     settings = get_settings()
+    if not settings.jwt_secret:
+        raise HTTPException(status_code=500, detail="BLAZE_JWT_SECRET is not configured")
 
-    if settings.supabase_jwt_secret:
-        try:
-            return jwt.decode(
-                token,
-                settings.supabase_jwt_secret,
-                algorithms=["HS256"],
-                audience="authenticated",
-            )
-        except jwt.PyJWTError:
-            pass
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(
-            f"{settings.supabase_url}/auth/v1/user",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "apikey": settings.supabase_anon_key,
-            },
+    try:
+        return jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
         )
-        if response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        return response.json()
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Unauthorized") from exc
 
 
 def _profile_from_claims(claims: dict[str, Any]) -> AppUser:
@@ -145,7 +133,7 @@ async def get_current_session(
     if not token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    claims = await _verify_token(token)
+    claims = _verify_token(token)
     profile = _profile_from_claims(claims)
     db_user = await ensure_db_user(db, profile)
 

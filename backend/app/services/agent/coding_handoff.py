@@ -19,14 +19,16 @@ from app.services.integrations.github import (
     get_github_token,
 )
 from app.services.integrations.cursor_handoff import deliver_handoff_to_cursor, find_git_root
+from app.services.integrations.repo_workspaces import resolve_repo_workspace
 from app.services.vector.context import get_stored_related_context
 
 
-def _handoff_dir() -> Path:
+def _handoff_dir(workspace: Path | None = None) -> Path:
     settings = get_settings()
-    raw = settings.blaze_handoff_dir
-    if raw:
-        path = Path(raw).expanduser()
+    if workspace is not None:
+        path = workspace / ".blaze" / "handoffs"
+    elif settings.blaze_handoff_dir:
+        path = Path(settings.blaze_handoff_dir).expanduser()
     else:
         git_root = find_git_root()
         if git_root:
@@ -115,6 +117,7 @@ async def build_coding_handoff_markdown(action_id: str, user_id: str) -> dict[st
     suggested = payload.get("suggestedAction") or "handoff_coding"
     summary = payload.get("summary") or ""
     draft = payload.get("draftFollowUp") or ""
+    workspace = resolve_repo_workspace(repo)
 
     lines = [
         f"# Coding handoff: {external_id or issue_title or action_id}",
@@ -123,6 +126,20 @@ async def build_coding_handoff_markdown(action_id: str, user_id: str) -> dict[st
         summary or f"Work on {issue_title or 'the linked issue'} based on Blaze notes and context.",
         "",
     ]
+
+    if repo:
+        lines.extend(["## Local codebase", f"- **GitHub repo**: `{repo}`"])
+        if workspace:
+            lines.extend([
+                f"- **Workspace path**: `{workspace}`",
+                "- Implement changes in this checkout — not in the Blaze app repo.",
+            ])
+        else:
+            lines.extend([
+                "- **Workspace path**: _Not configured_",
+                "- Add a mapping in **Connections → Local repos** (or `~/.blaze/repos.json`).",
+            ])
+        lines.append("")
 
     if external_id:
         lines.extend([
@@ -157,9 +174,10 @@ async def build_coding_handoff_markdown(action_id: str, user_id: str) -> dict[st
     lines.extend([
         "## Instructions for the coding agent",
         "1. Read the issue, notes, and transcript above.",
-        "2. Implement, investigate, or fix as appropriate — do not only triage in Blaze.",
-        "3. Run relevant tests if a repo is checked out locally.",
-        "4. Summarize what you changed and whether a GitHub comment or PR is needed.",
+        "2. Open the **local codebase** path above (if configured) and work there.",
+        "3. Implement, investigate, or fix as appropriate — do not only triage in Blaze.",
+        "4. Run relevant tests in that repo.",
+        "5. Summarize what you changed and whether a GitHub comment or PR is needed.",
         "",
         f"**Blaze action ID**: `{action_id}`",
         f"**Suggested Blaze action**: `{suggested}`",
@@ -175,6 +193,7 @@ async def build_coding_handoff_markdown(action_id: str, user_id: str) -> dict[st
         "externalId": external_id,
         "issueUrl": issue_url,
         "suggestedAction": suggested,
+        "workspacePath": str(workspace) if workspace else None,
         "markdown": markdown,
     }
 
@@ -187,10 +206,11 @@ async def write_coding_handoff_file(action_id: str, user_id: str) -> dict[str, A
     external = handoff.get("externalId") or handoff.get("actionId") or action_id
     slug = _slugify(str(external))
     filename = f"{slug}-{action_id[:8]}.md"
-    path = _handoff_dir() / filename
+    workspace = resolve_repo_workspace(handoff.get("repo"))
+    path = _handoff_dir(workspace) / filename
     path.write_text(handoff["markdown"], encoding="utf-8")
 
     handoff["path"] = str(path.resolve())
     handoff["filename"] = filename
-    handoff["cursorDelivery"] = deliver_handoff_to_cursor(path)
+    handoff["cursorDelivery"] = deliver_handoff_to_cursor(path, workspace)
     return handoff

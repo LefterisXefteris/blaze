@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { BlazeLogo } from "@/components/blaze-logo";
 
 const links = [
@@ -18,8 +17,7 @@ export function Nav() {
   const router = useRouter();
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/signout", { method: "POST" });
     router.push("/login");
     router.refresh();
   };

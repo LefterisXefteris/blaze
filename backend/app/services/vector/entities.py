@@ -126,28 +126,52 @@ async def _add_priority_hit(
     )
 
 
-async def find_priority_by_title_keywords(
+_KEYWORD_SKIP_WORDS = {
+    "about",
+    "from",
+    "have",
+    "meeting",
+    "review",
+    "standup",
+    "sync",
+    "that",
+    "this",
+    "untitled",
+    "what",
+    "when",
+    "where",
+    "with",
+    "your",
+}
+
+
+def _extract_keyword_terms(text: str) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return [w for w in words if len(w) > 3 and w not in _KEYWORD_SKIP_WORDS]
+
+
+async def find_priority_by_text_keywords(
     user_id: str,
-    title: str | None,
+    text: str | None,
+    *,
+    limit: int = 5,
 ) -> list[ContextHit]:
-    if not title or not title.strip():
+    if not text or not text.strip():
         return []
 
-    skip_words = {"meeting", "review", "sync", "standup"}
-    words = [
-        w
-        for w in title.lower().split()
-        if len(w) > 3 and w not in skip_words
-    ]
+    words = _extract_keyword_terms(text)
     if not words:
         return []
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(PriorityItem).where(
+            select(PriorityItem)
+            .where(
                 PriorityItem.userId == user_id,
                 PriorityItem.status == "open",
-            ).limit(20)
+            )
+            .order_by(PriorityItem.priority.asc())
+            .limit(50)
         )
         items = result.scalars().all()
 
@@ -176,4 +200,11 @@ async def find_priority_by_title_keywords(
             )
 
     hits.sort(key=lambda h: h.similarity, reverse=True)
-    return hits[:3]
+    return hits[:limit]
+
+
+async def find_priority_by_title_keywords(
+    user_id: str,
+    title: str | None,
+) -> list[ContextHit]:
+    return await find_priority_by_text_keywords(user_id, title, limit=3)
