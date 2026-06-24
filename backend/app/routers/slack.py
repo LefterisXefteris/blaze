@@ -14,6 +14,7 @@ from app.services.integrations.slack_approvals import (
     handle_slack_interaction,
     try_handle_approval_command,
 )
+from app.services.integrations.slack_ping import try_handle_blaze_ping
 from app.services.integrations.slack_meetings import (
     handle_slack_huddle_ended,
     handle_slack_huddle_started,
@@ -92,6 +93,15 @@ async def slack_events(request: Request):
                     event["text"],
                     team_id,
                 )
+                if not handled:
+                    await try_handle_blaze_ping(
+                        event["channel"],
+                        event.get("user"),
+                        event["text"],
+                        team_id,
+                        thread_ts=event.get("thread_ts") or event.get("ts"),
+                        bot_id=event.get("bot_id"),
+                    )
                 if not handled:
                     await handle_slack_message(
                         event["channel"],

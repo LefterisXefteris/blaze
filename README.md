@@ -4,165 +4,156 @@
 
 # Blaze
 
-### Agentic AI note-taking — capture conversations, produce structured notes, and act on what matters.
-
-**Your conversations, on fire with action.** 🔥
+**Notes that do the boring part for you.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-f97316.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python%203.12-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Postgres + pgvector](https://img.shields.io/badge/Postgres-pgvector-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
-[![OpenAI](https://img.shields.io/badge/OpenAI-embeddings-412991?logo=openai&logoColor=white)](https://platform.openai.com/)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-[Quick start](#-quick-start) · [Features](#-features) · [How it works](#-how-it-works) · [Setup](#-full-setup) · [Architecture](#-architecture)
+[Quick start](#quick-start) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Setup](#full-setup) · [Architecture](#architecture)
 
 </div>
 
 ---
 
-## What is Blaze?
+## About
 
-Blaze is an **open-source, agentic AI note-taker built for engineering teams**. It's like Granola — but it doesn't just *write* notes, it **acts on them**, and it's wired deep into GitHub and Cursor.
+Most note-takers stop at the transcript. You still have to read it back, pull out the action items, open Calendar, write the GitHub comment, and brief whoever is picking up the work. Blaze is the part that happens after the transcript.
 
-Capture a conversation from anywhere — a live Slack huddle, your microphone, a pasted transcript, or a GitHub issue thread — and Blaze turns it into **structured notes and executable actions** in real time. Low-risk actions run automatically; high-risk ones wait for your approval.
+It listens to a conversation (a Slack huddle, your microphone, a pasted transcript, a GitHub issue thread), writes structured notes as the conversation happens, and then turns the decisions inside those notes into real actions. Safe, routine actions just run. Anything risky waits for a yes from you, either in the app or straight from a Slack button.
 
-> **The killer feature:** approve a *"Hand off to coding agent"* action and Blaze writes a markdown brief into your local repo, drops a Cursor rules file, and opens Cursor — so a coding agent picks up the task with full context from your meeting.
+The piece I'm most proud of: approve a "hand off to coding agent" action and Blaze writes a markdown brief into your local checkout, drops a Cursor rules file next to it, and opens Cursor. A coding agent then starts the task already knowing what the meeting decided. No copy-paste, no re-explaining context.
+
+It's open source, it leans on GitHub and Cursor where it counts, and it's built for people who spend their day in meetings and would rather be writing code.
 
 ```
-🎙️  "We agreed to fix the flaky auth test and ship the rate-limiter by Friday."
-          │
-          ▼
-📝  Live notes  →  ✅ Action items  →  🔗 Linked to issue #142
-          │
-          ▼
-🤖  Calendar hold (auto)   ·   GitHub comment (confirm)   ·   Cursor handoff (confirm)
+"Let's fix the flaky auth test and ship the rate-limiter by Friday."
+        │
+        ▼
+  live notes  →  action items  →  linked to issue #142
+        │
+        ▼
+  calendar hold (auto)   github comment (ask first)   cursor handoff (ask first)
 ```
 
-## ✨ Features
+## What it does
 
-| | |
-|---|---|
-| 🎙️ **Live capture** | Granola-style notes while Slack huddles, mic sessions, or pasted transcripts unfold — structured in real time, not after the fact. |
-| 🤖 **Agentic actions** | Calendar holds, GitHub acks, and task updates run automatically when confidence is high — you stay in flow. |
-| 🛡️ **Human-in-the-loop** | High-risk intents (comments, emails, coding handoffs) land in a confirm queue. Nothing ships without your approval — from the web **or Slack buttons**. |
-| 🐙 **GitHub inbox** | Assignments, @mentions, and review requests surface as an AI-ranked priority inbox. Match meeting notes to the issues they reference. |
-| 🧠 **Semantic search** | pgvector indexes every conversation and GitHub item, so live notes auto-link related PRs/issues and search finds decisions instantly. |
-| ⚡ **Cursor handoff** | Turn "let's fix #142" into a structured markdown brief + Cursor rules dropped straight into your local checkout. |
-| 🍳 **Recipes** | Reusable prompts (follow-up email, exec summary, action items) you run on any session. |
-| 🖥️ **Desktop app** | A Tauri companion delivers coding handoffs locally even when the API runs in the cloud. |
+- **Live capture.** Notes get structured while the conversation is still going, not after you've forgotten half of it. Works with Slack huddles and channels, mic sessions (ElevenLabs Scribe, with browser speech as a fallback), or anything you paste in.
+- **Actions, not just summaries.** Blaze pulls intents out of the conversation, scores how risky each one is, and acts. Calendar holds and task updates go through on their own; comments, emails, and handoffs don't.
+- **You stay in control.** High-risk actions sit in a confirm queue until you approve them. Approve from the web or tap the button Blaze posts in Slack.
+- **A GitHub inbox that's actually ranked.** Assignments, mentions, and review requests show up sorted by what matters, and meeting notes get matched to the issues they mention.
+- **Search that understands meaning.** Every conversation and GitHub item is embedded with pgvector, so live notes auto-link related PRs and issues, and search finds the decision instead of just the keyword.
+- **Cursor handoffs.** Turn "let's fix #142" into a brief plus a rules file dropped into your local repo.
+- **Recipes.** Saved prompts (follow-up email, exec summary, action items) you can run on any session.
+- **A desktop app.** A small Tauri companion handles the local Cursor handoff even when the API itself runs in the cloud.
 
-## 🔁 How it works
+## How it works
 
-Blaze runs a simple loop — **Capture → Understand → Act** — powered by two LangGraph pipelines.
+The loop is simple: capture, understand, act. Two LangGraph pipelines do the heavy lifting.
 
-| Step | What happens |
-|------|--------------|
-| **1. Capture** | Connect Slack and start a session (huddles auto-open), speak into your mic (ElevenLabs Scribe realtime, browser-speech fallback), paste a transcript, or import a GitHub issue. |
-| **2. Understand** | Blaze streams live notes over SSE — key points, decisions, owners — while pgvector links the conversation to related GitHub issues and PRs. |
-| **3. Act** | Intents are extracted and risk-classified. Low-risk actions execute instantly; high-risk ones wait in your confirm queue (web or Slack). |
+When a session is active, the **live-notes graph** pulls in related context from past sessions and GitHub, indexes the new transcript, and writes a running summary. In parallel, the **intent graph** extracts what people committed to, runs each item through a risk classifier, and either executes it or drops it in your confirm queue. Low-confidence or sensitive items (anything mentioning firing someone, passwords, "delete all", and so on) are always treated as high risk, so nothing surprising happens on its own.
 
-## 🚀 Quick start
+## Quick start
 
-Get the UI running locally in ~5 minutes — no paid API keys required (demo login).
+You can have the UI running in about five minutes, and you don't need any paid keys to look around. Demo login is enough.
 
 ```bash
-# 1. Clone
 git clone https://github.com/LefterisXefteris/blaze.git
 cd blaze
 
-# 2. Install (frontend + Python backend venv)
+# frontend + python backend venv
 npm install
 npm run setup:api
 
-# 3. Configure
+# config
 cp .env.example .env
 #   set BLAZE_JWT_SECRET to any long random string
-#   set DEV_DEMO_LOGIN=true to enable the "Enter demo" button
+#   set DEV_DEMO_LOGIN=true so the "Enter demo" button shows up
 
-# 4. Database (Docker Postgres + pgvector)
+# database (docker postgres + pgvector)
 npm run db:setup
 
-# 5. Run everything (API + web)
+# run the api and the web app together
 npm run dev:all
 ```
 
-Open **[http://localhost:3010](http://localhost:3010)** and click **Enter demo**. 🎉
+Open [http://localhost:3010](http://localhost:3010) and click **Enter demo**.
 
-> Add `OPENAI_API_KEY` to your `.env` when you want embeddings, semantic search, and AI notes. Everything else (Slack, GitHub, Google, ElevenLabs) is optional — see [Setup](#-full-setup).
+Add an `OPENAI_API_KEY` when you want embeddings, semantic search, and AI notes. Slack, GitHub, Google, and ElevenLabs are all optional and stay off until you wire them up.
 
-## 🧰 Tech stack
+## Tech stack
 
-- **[Next.js 16](https://nextjs.org/) + React 19** — frontend (JWT cookie sessions, Google OAuth / demo login)
-- **[FastAPI](https://fastapi.tiangolo.com/)** — backend API, agents, integrations (`backend/`)
-- **[LangGraph](https://langchain-ai.github.io/langgraph/)** — agent orchestration (intent + live-notes pipelines)
-- **[Postgres + pgvector](https://github.com/pgvector/pgvector)** — database and semantic search (Docker locally)
-- **[OpenAI](https://platform.openai.com/)** — embeddings + intent extraction
-- **[Tauri](https://tauri.app/)** — desktop companion (`desktop/`) for local Cursor handoffs
-- **Redis** — background job queue (optional; in-process fallback by default)
+- **Next.js 16 + React 19** for the frontend, with JWT cookie sessions and Google OAuth or demo login.
+- **FastAPI** for the backend API, agents, and integrations (`backend/`).
+- **LangGraph** for agent orchestration (the intent and live-notes pipelines).
+- **Postgres + pgvector** for storage and semantic search, running in Docker locally.
+- **OpenAI** for embeddings and intent extraction.
+- **Tauri** for the desktop companion (`desktop/`) that handles local Cursor handoffs.
+- **Redis** for the background job queue (optional; there's an in-process fallback).
 
-## 📦 Full setup
+## Full setup
 
 ### Prerequisites
 
-| Tool | Version | Notes |
-|------|---------|-------|
+| Tool | Version | Why |
+|------|---------|-----|
 | [Node.js](https://nodejs.org/) | 20+ | Frontend, Prisma, scripts |
 | [Python](https://www.python.org/) | 3.12+ | FastAPI backend |
-| [Git](https://git-scm.com/) | any | Clone the repo |
+| [Git](https://git-scm.com/) | any | Cloning the repo |
 | [Docker](https://www.docker.com/) | recommended | Local Postgres + pgvector |
-| [Rust](https://rustup.rs/) | optional | Desktop app only (`desktop/`) |
+| [Rust](https://rustup.rs/) | optional | Only for the desktop app |
 
-Third-party API keys are **not** included in this repository. Create your own accounts and add keys to a local `.env` file (see [Secrets and API keys](#secrets-and-api-keys)).
+No third-party keys ship in this repo. You bring your own and keep them in a local `.env` (see [Secrets and API keys](#secrets-and-api-keys)).
 
-### 1. Clone the repository
+### 1. Clone
 
 ```bash
 git clone https://github.com/LefterisXefteris/blaze.git
 cd blaze
 ```
 
-Do **not** commit a `.env` file. It is gitignored; only `.env.example` (placeholders, no real secrets) is tracked.
+Don't commit a `.env` file. It's gitignored; only `.env.example` (placeholders, no real secrets) is tracked.
 
 ### 2. Install dependencies
 
 ```bash
-# Frontend + Prisma
+# frontend + prisma
 npm install
 
-# Python backend (creates backend/.venv)
+# python backend (creates backend/.venv)
 npm run setup:api
 ```
 
-### 3. Configure environment
+### 3. Configure your environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your own values. The example file uses empty strings and safe placeholders — replace them locally; never paste real keys into tracked files or pull requests.
+Then edit `.env`. The example file uses empty strings and safe placeholders, so replace them locally and never paste real keys into tracked files or pull requests.
 
-**Minimum to run the UI locally** (demo login, no integrations):
+To just run the UI locally with demo login and no integrations, you only need:
 
-| Variable | Example / value |
-|----------|-----------------|
-| `BLAZE_JWT_SECRET` | Any long random string (sessions for Next.js + FastAPI) |
+| Variable | Value |
+|----------|-------|
+| `BLAZE_JWT_SECRET` | Any long random string (shared by Next.js and FastAPI) |
 | `DATABASE_URL` | `postgresql://lefteris:lefteris@localhost:5432/lefteris_os` |
 | `DIRECT_URL` | Same as `DATABASE_URL` for local dev |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3010` |
-| `DEV_DEMO_LOGIN` | `true` — enables **Enter demo** on the login page |
+| `DEV_DEMO_LOGIN` | `true`, which enables **Enter demo** |
 
-**Your own API keys** (add only what you need; leave others blank):
+Add the keys you actually need and leave the rest blank:
 
-| Variable | Where to get a key | Used for |
-|----------|-------------------|----------|
+| Variable | Where to get it | What it unlocks |
+|----------|-----------------|-----------------|
 | `OPENAI_API_KEY` | [OpenAI Platform](https://platform.openai.com/) | Embeddings, vector search, live notes, intent extraction |
-| `ELEVENLABS_API_KEY` | [ElevenLabs](https://elevenlabs.io/) | Realtime voice transcription (Slack huddles); falls back to browser speech if unset |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/) | Sign in with Google + Calendar |
+| `ELEVENLABS_API_KEY` | [ElevenLabs](https://elevenlabs.io/) | Realtime voice for Slack huddles (falls back to browser speech) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/) | Sign in with Google plus Calendar |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_WEBHOOK_SECRET` | GitHub OAuth App + webhook | Issues, PRs, coding handoffs |
 | `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` / `SLACK_SIGNING_SECRET` | [Slack API](https://api.slack.com/apps) | Slack meeting capture |
 
-Blaze runs without these keys, but the related features stay disabled until you configure them.
+Blaze runs fine without any of these. The matching features just stay dark until you configure them.
 
 ### 4. Set up the database
 
@@ -170,9 +161,9 @@ Blaze runs without these keys, but the related features stay disabled until you 
 npm run db:setup
 ```
 
-This starts Docker Postgres (`pgvector/pgvector:pg16`), applies the Prisma schema, and enables the `vector` extension for semantic search.
+That starts Docker Postgres (`pgvector/pgvector:pg16`), applies the Prisma schema, and turns on the `vector` extension for semantic search.
 
-Or step by step:
+Or do it step by step:
 
 ```bash
 docker compose up postgres -d
@@ -182,23 +173,21 @@ npm run db:vectors
 
 ### 5. Start the app
 
-One command from the repo root (API + web):
+One command from the repo root runs both the API and the web app:
 
 ```bash
 npm run dev:all
 ```
 
-Open [http://localhost:3010](http://localhost:3010). The frontend proxies `/api/*` to FastAPI at `http://127.0.0.1:8000`.
+Open [http://localhost:3010](http://localhost:3010). The frontend proxies `/api/*` to FastAPI at `http://127.0.0.1:8000`. Blaze runs on port 3010 on purpose, so it won't fight Grafana or anything else sitting on 3000.
 
-> **Note:** Blaze uses port **3010** by default so it does not clash with Grafana or other tools on 3000.
-
-Or run them separately:
+Prefer to run them apart:
 
 ```bash
-# Terminal 1 — FastAPI API
+# terminal 1 — fastapi
 npm run dev:api
 
-# Terminal 2 — Next.js frontend
+# terminal 2 — next.js
 npm run dev
 ```
 
@@ -219,20 +208,20 @@ npm run dev:all       # or dev:api + dev in separate terminals
 
 See [desktop/README.md](desktop/README.md) for auth token setup and production config.
 
-## 🗂️ Project layout
+## Project layout
 
 ```
 blaze/
-├── src/                 # Next.js frontend (pages, components, lib)
-├── backend/             # FastAPI API, agents, integrations
-├── desktop/             # Tauri desktop app (local Cursor handoffs)
-├── prisma/              # Database schema + migrations
-├── docker-compose.yml   # Postgres (pgvector), Redis, API, worker
-├── .env.example         # Environment template — copy to .env
-└── package.json         # Root scripts (dev, db, worker, desktop)
+├── src/                 # next.js frontend (pages, components, lib)
+├── backend/             # fastapi api, agents, integrations
+├── desktop/             # tauri desktop app (local cursor handoffs)
+├── prisma/              # database schema + migrations
+├── docker-compose.yml   # postgres (pgvector), redis, api, worker
+├── .env.example         # environment template — copy to .env
+└── package.json         # root scripts (dev, db, worker, desktop)
 ```
 
-## 🏛️ Architecture
+## Architecture
 
 ```
 Browser → Next.js (:3010)  ──proxy /api/*──►  FastAPI (:8000)
@@ -240,76 +229,76 @@ Browser → Next.js (:3010)  ──proxy /api/*──►  FastAPI (:8000)
     Local JWT sessions                      Postgres + pgvector
 ```
 
-- **Frontend** (`src/app/`, `src/components/`) — React pages, issues session JWT on login
-- **Backend** (`backend/app/`) — API routes, agents, integrations, vector search
-- **Auth** — demo login or Google OAuth; FastAPI validates the same JWT from cookies or `Authorization: Bearer`
+- The **frontend** (`src/app/`, `src/components/`) is the React app and issues a session JWT on login.
+- The **backend** (`backend/app/`) holds the API routes, agents, integrations, and vector search.
+- **Auth** is demo login or Google OAuth. FastAPI checks the same JWT whether it arrives as a cookie or an `Authorization: Bearer` header.
 
-Under the hood, two LangGraph pipelines do the work: an **intent graph** (extract intents → classify risk → execute or queue) and a **live-notes graph** (retrieve context → index transcript → generate summary).
+Behind that, the two LangGraph pipelines do the work: the intent graph (extract, classify risk, then execute or queue) and the live-notes graph (retrieve context, index the transcript, generate the summary).
 
-## 🔌 Integrations
+## Integrations
 
 ### Google sign-in (optional)
 
-1. Create a Google Cloud OAuth client (Web application)
-2. Enable the **Google Calendar API** for your project
-3. Add redirect URIs:
+1. Create a Google Cloud OAuth client (Web application).
+2. Enable the Google Calendar API for the project.
+3. Add the redirect URIs:
    - `http://localhost:3010/auth/callback` (sign-in)
    - `http://localhost:3010/api/integrations/google/callback` (connect from Settings)
-4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
+4. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
 
-Without Google OAuth, use **Enter demo** (`DEV_DEMO_LOGIN=true`).
+No Google OAuth? Use **Enter demo** with `DEV_DEMO_LOGIN=true`.
 
-### Slack meeting capture (Granola-style)
+### Slack meeting capture
 
-1. Create a Slack app with OAuth + **Event Subscriptions** → `{APP_URL}/api/slack/events`
-2. Add bot scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `users:read`, `chat:write`
-3. Subscribe to events: `message.channels`, `message.groups`, `message.im`, `huddle_started`, `huddle_ended`
-4. Connect in **Settings → Slack**
-5. Click **Capture Slack meeting** on the home page and pick a channel
+1. Create a Slack app with OAuth and Event Subscriptions pointed at `{APP_URL}/api/slack/events`.
+2. Add bot scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `users:read`, `chat:write`.
+3. Subscribe to events: `message.channels`, `message.groups`, `message.im`, `huddle_started`, `huddle_ended`.
+4. Connect it under **Settings → Slack**.
+5. Hit **Capture Slack meeting** on the home page and pick a channel.
 
-When a huddle starts (or you invite Blaze to a channel), Blaze auto-creates a capture session and posts live notes in Slack. Open the session in Blaze — voice capture uses **ElevenLabs Scribe** when `ELEVENLABS_API_KEY` is set (falls back to browser speech otherwise).
+When a huddle starts (or you invite Blaze into a channel), it spins up a capture session and posts live notes back to Slack. Open that session in Blaze and voice capture uses ElevenLabs Scribe if `ELEVENLABS_API_KEY` is set, or browser speech otherwise.
 
-### GitHub integration
+### GitHub
 
-1. Create a GitHub OAuth App → callback: `{APP_URL}/api/integrations/github/callback`
-2. Add webhook URL: `{APP_URL}/api/github/webhook` (events: issues, issue_comment, pull_request)
-3. Connect in **Settings → GitHub**
+1. Create a GitHub OAuth App with the callback `{APP_URL}/api/integrations/github/callback`.
+2. Add a webhook at `{APP_URL}/api/github/webhook` for the `issues`, `issue_comment`, and `pull_request` events.
+3. Connect it under **Settings → GitHub**.
 
 ### Cursor handoff (local dev)
 
-When you approve a **Hand off to coding agent** action, Blaze:
+Approve a **Hand off to coding agent** action and Blaze will:
 
-1. Resolves the issue's GitHub repo to a **local checkout** (Connections → Local repos, `~/.blaze/repos.json`, or `BLAZE_REPO_MAP`)
-2. Writes a markdown bundle to `.blaze/handoffs/` inside that repo (or the nearest git repo if unmapped)
-3. Opens the mapped workspace in Cursor, then adds the handoff file
-4. Writes `.cursor/rules/blaze-handoff.mdc` in that repo so Cursor picks up the task automatically
+1. Resolve the issue's GitHub repo to a local checkout (via Connections → Local repos, `~/.blaze/repos.json`, or `BLAZE_REPO_MAP`).
+2. Write a markdown bundle into `.blaze/handoffs/` inside that repo (or the nearest git repo if it isn't mapped).
+3. Open that workspace in Cursor and add the handoff file.
+4. Write `.cursor/rules/blaze-handoff.mdc` so Cursor picks the task up on its own.
 
-Set `BLAZE_CURSOR_HANDOFF=off` to disable auto-open. CLI:
+Set `BLAZE_CURSOR_HANDOFF=off` to skip the auto-open. From the CLI:
 
 ```bash
-# Preview handoff markdown (requires BLAZE_USER_ID in .env)
+# preview the handoff markdown (needs BLAZE_USER_ID in .env)
 npm run blaze -- handoff <action-id>
 
-# Write file + open in Cursor
+# write the file and open it in cursor
 npm run blaze -- handoff <action-id> --run
 ```
 
-Install the [Cursor CLI](https://cursor.com/docs/cli) (`cursor` on your PATH) for best results.
+Install the [Cursor CLI](https://cursor.com/docs/cli) (so `cursor` is on your PATH) for the smoothest experience.
 
 ### Desktop app
 
-A **Tauri** companion (`desktop/`) wraps the Blaze web UI and delivers coding handoffs locally (write handoff file, open Cursor, drop rules snippet). Use this for production or whenever the API runs in Docker/cloud.
+The Tauri companion in `desktop/` wraps the web UI and does the local handoff work: write the file, open Cursor, drop the rules snippet. Use it for production, or any time the API is running in Docker or the cloud.
 
 ```bash
 npm run desktop:install
-npm run dev:all        # API + web, then desktop in another terminal
+npm run dev:all        # api + web, then the desktop app in another terminal
 ```
 
-See [desktop/README.md](desktop/README.md) for architecture, auth token setup, and production config. Set `BLAZE_CURSOR_HANDOFF=off` on cloud deployments — let the desktop app handle Cursor integration.
+See [desktop/README.md](desktop/README.md) for the details. On cloud deployments, set `BLAZE_CURSOR_HANDOFF=off` and let the desktop app own the Cursor integration.
 
-## 🐳 Docker
+## Docker
 
-`docker-compose.yml` provides services for local development:
+`docker-compose.yml` covers local development:
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -318,35 +307,35 @@ See [desktop/README.md](desktop/README.md) for architecture, auth token setup, a
 | `api` | 8000 | FastAPI backend container |
 | `worker` | — | Intent extraction worker |
 
-**Postgres only** (typical local dev):
+Just Postgres (the usual local setup):
 
 ```bash
 docker compose up postgres -d
 npm run db:setup
 ```
 
-**Full API + worker**:
+The full API and worker:
 
 ```bash
 docker compose up api worker redis postgres -d
 ```
 
-You still run the Next.js frontend separately with `npm run dev` unless you deploy it elsewhere.
+You still run the Next.js frontend yourself with `npm run dev` unless you deploy it somewhere else.
 
-## ⚙️ Environment variables
+## Environment variables
 
-Full template: [`.env.example`](.env.example). All integration keys default to empty — you supply your own.
+The full template lives in [`.env.example`](.env.example). Every integration key defaults to empty; you supply your own.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BLAZE_JWT_SECRET` | Yes | Shared secret for session JWTs (Next.js + FastAPI) — generate your own |
+| `BLAZE_JWT_SECRET` | Yes | Shared secret for session JWTs (Next.js + FastAPI); generate your own |
 | `DATABASE_URL` | Yes | Local Postgres connection string |
 | `DIRECT_URL` | Yes | Same as `DATABASE_URL` for local dev |
 | `NEXT_PUBLIC_APP_URL` | Yes | App URL for OAuth redirects |
-| `API_URL` | Local dev | FastAPI URL for Next.js proxy (default `http://127.0.0.1:8000`) |
-| `DEV_DEMO_LOGIN` | Local | `true` enables demo login button |
-| `OPENAI_API_KEY` | Your key | LLM + embeddings — [get a key](https://platform.openai.com/) |
-| `ELEVENLABS_API_KEY` | Your key | Realtime voice (Slack huddles) — [get a key](https://elevenlabs.io/) |
+| `API_URL` | Local dev | FastAPI URL for the Next.js proxy (default `http://127.0.0.1:8000`) |
+| `DEV_DEMO_LOGIN` | Local | `true` enables the demo login button |
+| `OPENAI_API_KEY` | Your key | LLM + embeddings ([get a key](https://platform.openai.com/)) |
+| `ELEVENLABS_API_KEY` | Your key | Realtime voice for Slack huddles ([get a key](https://elevenlabs.io/)) |
 | `GOOGLE_CLIENT_ID` | Your key | Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | Your key | Google Cloud OAuth secret |
 | `GITHUB_CLIENT_ID` | Your key | GitHub OAuth app |
@@ -355,44 +344,38 @@ Full template: [`.env.example`](.env.example). All integration keys default to e
 | `SLACK_CLIENT_ID` | Your key | Slack app client ID |
 | `SLACK_CLIENT_SECRET` | Your key | Slack app client secret |
 | `SLACK_SIGNING_SECRET` | Your key | Slack request signing secret |
-| `REDIS_URL` | Optional | Job queue (requires `npm run worker`) |
+| `REDIS_URL` | Optional | Job queue (needs `npm run worker`) |
 
 ### Secrets and API keys
 
-This repo ships **no** production or personal API keys. Setup is intentionally bring-your-own-credentials:
+This repo ships no production or personal keys. Setup is bring-your-own on purpose:
 
-1. Copy `.env.example` → `.env` (never commit `.env`).
+1. Copy `.env.example` to `.env` (and never commit `.env`).
 2. Sign up with each provider you need and create your own keys.
-3. Paste keys **only** into your local `.env` (or your deployment secret store).
+3. Paste keys only into your local `.env` or your deployment's secret store.
 
-`.gitignore` excludes `.env*` except `.env.example`, which contains empty placeholders only.
+`.gitignore` excludes `.env*` except `.env.example`, which holds empty placeholders only. So: don't commit `.env` or anything with a real secret, don't share keys in issues or screenshots, and rotate any key that's ever been exposed before reusing it.
 
-**Do not:**
+## Troubleshooting
 
-- Commit `.env`, `.env.local`, or any file containing real secrets
-- Share keys in issues, PRs, chat logs, or screenshots
-- Reuse keys from other projects without rotating them if they were ever exposed
-
-## 🧯 Troubleshooting
-
-| Issue | Fix |
-|-------|-----|
-| `db:push` fails | Run `docker compose up postgres -d` and check `DATABASE_URL` |
+| Problem | Fix |
+|---------|-----|
+| `db:push` fails | Run `docker compose up postgres -d` and double-check `DATABASE_URL` |
 | pgvector errors | Run `npm run db:vectors` after `db:push` |
-| API returns 401 | Ensure `BLAZE_JWT_SECRET` matches in `.env` and restart `dev:all` |
-| `/api/*` errors in browser | Ensure `npm run dev:api` is running on port 8000 |
-| Demo login fails | Set `DEV_DEMO_LOGIN=true`, run `npm run db:setup` |
-| Handoffs don't open Cursor | Install [Cursor CLI](https://cursor.com/docs/cli) or use the desktop app |
+| API returns 401 | Make sure `BLAZE_JWT_SECRET` matches in `.env`, then restart `dev:all` |
+| `/api/*` errors in the browser | Make sure `npm run dev:api` is up on port 8000 |
+| Demo login fails | Set `DEV_DEMO_LOGIN=true` and run `npm run db:setup` |
+| Handoffs don't open Cursor | Install the [Cursor CLI](https://cursor.com/docs/cli) or use the desktop app |
 
-## 🤝 Contributing
+## Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to open an issue or submit a pull request.
+Issues, ideas, and pull requests are all welcome.
 
-1. Fork the repo and create your branch from `main`
-2. Run the app locally (see [Quick start](#-quick-start))
-3. Make your change and open a PR with a clear description
+1. Fork the repo and branch off `main`.
+2. Get it running locally (see [Quick start](#quick-start)).
+3. Make your change and open a PR with a clear description of what and why.
 
-## 📄 License
+## License
 
 [MIT](LICENSE) © Lefteris Xefteris
 
@@ -400,6 +383,6 @@ Contributions, issues, and feature requests are welcome! Feel free to open an is
 
 <div align="center">
 
-**If Blaze is useful to you, please consider giving it a ⭐ — it really helps!**
+If Blaze saves you some time, a star goes a long way.
 
 </div>

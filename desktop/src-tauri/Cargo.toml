@@ -21,3 +21,5 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tokio = { version = "1", features = ["time"] }
 dirs = "6"
 base64 = "0.22"
+cookie = "0.18"
+time = "0.3"

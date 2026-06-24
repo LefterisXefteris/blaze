@@ -265,7 +265,10 @@ export function NotesEditor() {
   const [finishing, setFinishing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [listSidebarOpen, setListSidebarOpen] = useState(false);
+  const [listSidebarOpen, setListSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+  });
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [priorityItems, setPriorityItems] = useState<PriorityItem[]>([]);
   const [mentionOpen, setMentionOpen] = useState(false);

@@ -7,7 +7,7 @@ use api::{
     check_connection, fetch_actions, fetch_handoff_markdown, fetch_repo_workspaces,
     needs_local_delivery, ConnectionStatus,
 };
-use auth::extract_token_from_cookies;
+use auth::{ensure_blaze_webview_auth, extract_token_from_cookies};
 use config::{blaze_notes_url, load_config, save_config, DesktopConfig};
 use handoff::DeliveryResult;
 use serde::Serialize;
@@ -129,12 +129,51 @@ async fn sync_auth_from_blaze_inner(app: &AppHandle) -> Result<bool, String> {
 fn spawn_blaze_page_load_sync(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let _ = restore_blaze_webview_auth(&app);
         if let Ok(changed) = sync_auth_from_blaze_inner(&app).await {
             if changed {
                 let _ = app.emit("connection-updated", ());
             }
         }
     });
+}
+
+fn restore_blaze_webview_auth(app: &AppHandle) -> Result<(), String> {
+    let blaze = match app.get_webview_window("blaze") {
+        Some(window) => window,
+        None => return Ok(()),
+    };
+
+    let (app_url, token) = {
+        let state = app.state::<AppState>();
+        let config = state.config.lock().unwrap();
+        (
+            blaze_notes_url(&config),
+            config.access_token.clone().filter(|t| !t.trim().is_empty()),
+        )
+    };
+
+    let Some(token) = token else {
+        return Ok(());
+    };
+
+    if !ensure_blaze_webview_auth(&app_url, &token, &blaze)? {
+        return Ok(());
+    }
+
+    let target = if app_url.ends_with("/notes") {
+        app_url
+    } else {
+        format!("{app_url}/notes")
+    };
+    blaze
+        .eval(&format!(
+            "window.location.replace({});",
+            serde_json::to_string(&target).map_err(|e| e.to_string())?
+        ))
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 fn create_blaze_window(app: &AppHandle, app_url: &str) -> Result<(), String> {
@@ -183,6 +222,8 @@ async fn open_blaze_app(app: AppHandle) -> Result<(), String> {
     } else {
         create_blaze_window(&app, &app_url)?;
     }
+
+    let _ = restore_blaze_webview_auth(&app);
 
     Ok(())
 }

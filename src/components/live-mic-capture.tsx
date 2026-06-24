@@ -68,7 +68,7 @@ export function LiveMicCapture({
       const res = await fetch(`/api/sessions/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ speaker: "You", content: trimmed }),
+        body: JSON.stringify({ speaker: "You", content: trimmed, source: "voice" }),
       });
       if (res.ok) onTranscript();
     },
@@ -246,9 +246,9 @@ export function LiveMicCapture({
         <div>
           <p className="font-medium text-sm">Live voice capture</p>
           <p className="text-xs text-muted mt-0.5">
-            Keep this Blaze tab open during your Slack huddle. Blaze listens via
-            ElevenLabs Scribe and writes live notes + transcript. Slack thread
-            messages are captured automatically too.
+            Open this Blaze session during your Slack huddle and keep the tab focused.
+            Blaze listens with ElevenLabs Scribe (or browser speech) and posts each line
+            to Slack + live notes. Typed Slack messages are captured automatically too.
           </p>
         </div>
         <div className="flex gap-2">
