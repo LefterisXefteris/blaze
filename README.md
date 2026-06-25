@@ -39,7 +39,7 @@ It's open source, it leans on GitHub and Cursor where it counts, and it's built 
 
 ## What it does
 
-- **Live capture.** Notes get structured while the conversation is still going, not after you've forgotten half of it. Works with Slack huddles and channels, mic sessions (ElevenLabs Scribe, with browser speech as a fallback), or anything you paste in.
+- **Live capture.** Notes get structured while the conversation is still going, not after you've forgotten half of it. Works with Slack huddles and channels, manual notes, or anything you paste in.
 - **Actions, not just summaries.** Blaze pulls intents out of the conversation, scores how risky each one is, and acts. Calendar holds and task updates go through on their own; comments, emails, and handoffs don't.
 - **You stay in control.** High-risk actions sit in a confirm queue until you approve them. Approve from the web or tap the button Blaze posts in Slack.
 - **A GitHub inbox that's actually ranked.** Assignments, mentions, and review requests show up sorted by what matters, and meeting notes get matched to the issues they mention.
@@ -50,9 +50,9 @@ It's open source, it leans on GitHub and Cursor where it counts, and it's built 
 
 ## How it works
 
-The loop is simple: capture, understand, act. Two LangGraph pipelines do the heavy lifting.
+The loop is simple: capture, understand, act. A single in-process **Blaze pipeline** (`blaze_pipeline`) runs inside the FastAPI API after each write, debounced by three seconds.
 
-When a session is active, the **live-notes graph** pulls in related context from past sessions and GitHub, indexes the new transcript, and writes a running summary. In parallel, the **intent graph** extracts what people committed to, runs each item through a risk classifier, and either executes it or drops it in your confirm queue. Low-confidence or sensitive items (anything mentioning firing someone, passwords, "delete all", and so on) are always treated as high risk, so nothing surprising happens on its own.
+When a session is active, the pipeline pulls related context from past sessions and GitHub (pgvector), indexes the new transcript, and writes a running live summary. It then extracts intents (todos, GitHub next steps, comments), runs each through the **PolicyEngine** risk classifier, and either auto-executes low-risk actions or queues high-risk ones for your approval. Sensitive phrases (passwords, "delete all", and so on) are always treated as high risk, so nothing surprising happens on its own. The UI and Slack stay in sync via Server-Sent Events that poll Postgres every two seconds.
 
 ## Quick start
 
@@ -80,9 +80,9 @@ npm run dev:all
 
 Open [http://localhost:3010](http://localhost:3010) and click **Enter demo**.
 
-Add an `OPENAI_API_KEY` when you want embeddings, semantic search, and AI notes. Slack, GitHub, Google, and ElevenLabs are all optional and stay off until you wire them up.
+Add an `OPENAI_API_KEY` when you want embeddings, semantic search, and AI notes. Slack and GitHub are optional and stay off until you wire them up.
 
-For the full Docker stack (API, worker, Postgres, Redis, Langfuse, ngrok), see [Start and stop](#start-and-stop) below.
+For the full Docker stack (API, Postgres, Langfuse, ngrok), see [Start and stop](#start-and-stop) below.
 
 ## Start and stop
 
@@ -130,7 +130,7 @@ For Slack Event Subscriptions, point your app at the ngrok URL:
 ./run.sh down
 ```
 
-Stops ngrok and removes all Docker containers (API, worker, Postgres, Redis, Langfuse stack).
+Stops ngrok and removes all Docker containers (API, Postgres, Langfuse stack).
 
 ### Other `run.sh` commands
 
@@ -145,11 +145,9 @@ Stops ngrok and removes all Docker containers (API, worker, Postgres, Redis, Lan
 
 - **Next.js 16 + React 19** for the frontend, with JWT cookie sessions and Google OAuth or demo login.
 - **FastAPI** for the backend API, agents, and integrations (`backend/`).
-- **LangGraph** for agent orchestration (the intent and live-notes pipelines).
 - **Postgres + pgvector** for storage and semantic search, running in Docker locally.
 - **OpenAI** for embeddings and intent extraction.
 - **Tauri** for the desktop companion (`desktop/`) that handles local Cursor handoffs.
-- **Redis** for the background job queue (optional; there's an in-process fallback).
 
 ## Full setup
 
@@ -207,7 +205,6 @@ Add the keys you actually need and leave the rest blank:
 | Variable | Where to get it | What it unlocks |
 |----------|-----------------|-----------------|
 | `OPENAI_API_KEY` | [OpenAI Platform](https://platform.openai.com/) | Embeddings, vector search, live notes, intent extraction |
-| `ELEVENLABS_API_KEY` | [ElevenLabs](https://elevenlabs.io/) | Realtime voice for Slack huddles (falls back to browser speech) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | [Google Cloud Console](https://console.cloud.google.com/) | Sign in with Google plus Calendar |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_WEBHOOK_SECRET` | GitHub OAuth App + webhook | Issues, PRs, coding handoffs |
 | `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` / `SLACK_SIGNING_SECRET` | [Slack API](https://api.slack.com/apps) | Slack meeting capture |
@@ -250,14 +247,6 @@ npm run dev:api
 npm run dev
 ```
 
-### Optional: background worker (Redis)
-
-```bash
-docker compose up redis -d
-```
-
-Add `REDIS_URL="redis://localhost:6379"` to `.env`, then run `npm run worker` in a third terminal.
-
 ### Optional: desktop companion
 
 ```bash
@@ -275,26 +264,84 @@ blaze/
 ├── backend/             # fastapi api, agents, integrations
 ├── desktop/             # tauri desktop app (local cursor handoffs)
 ├── prisma/              # database schema + migrations
-├── docker-compose.yml          # postgres (pgvector), redis, api, worker
+├── docker-compose.yml          # postgres (pgvector), api
 ├── docker-compose.langfuse.yml # optional langfuse observability stack
 ├── run.sh                      # start/stop full stack + ngrok
 ├── .env.example                # environment template — copy to .env
-└── package.json                # root scripts (dev, db, worker, desktop)
+└── package.json                # root scripts (dev, db, desktop)
 ```
 
 ## Architecture
 
-```
-Browser → Next.js (:3010)  ──proxy /api/*──►  FastAPI (:8000)
-         ↓ blaze-auth-token cookie              ↓
-    Local JWT sessions                      Postgres + pgvector
+```mermaid
+flowchart TB
+    subgraph clients["Clients"]
+        Browser["Browser / Next.js UI :3010"]
+        Desktop["Tauri desktop app"]
+        Slack["Slack workspace"]
+    end
+
+    subgraph api["FastAPI API :8000"]
+        Proxy["Next.js /api/* proxy"]
+        Sessions["Sessions + notes routers"]
+        Queue["schedule_session_pipeline<br/>(3s debounce, in-process)"]
+        Pipeline["blaze_pipeline.process_session"]
+        Policy["PolicyEngine<br/>risk classify + dispatch"]
+        Executor["action_executor"]
+        Adapters["Integration adapters<br/>Slack · GitHub · Google"]
+        SSE["SSE /sessions/:id/stream<br/>(poll Postgres every 2s)"]
+    end
+
+    subgraph data["Data & search"]
+        PG[("Postgres<br/>sessions · messages · actions")]
+        Vec["pgvector<br/>semantic search"]
+    end
+
+    subgraph external["External services"]
+        OpenAI["OpenAI<br/>embeddings + LLM"]
+        GH["GitHub API"]
+        GCal["Google Calendar"]
+        Cursor["Cursor IDE<br/>.blaze/handoffs/*.md"]
+    end
+
+    Browser --> Proxy
+    Desktop --> Proxy
+    Proxy --> Sessions
+    Slack -->|webhooks / OAuth| Sessions
+
+    Sessions --> PG
+    Sessions --> Queue
+    Queue --> Pipeline
+
+    Pipeline --> Vec
+    Pipeline --> OpenAI
+    Pipeline --> Policy
+    Policy -->|low risk| Executor
+    Policy -->|high risk| PG
+    Executor --> Adapters
+    Adapters --> Slack
+    Adapters --> GH
+    Adapters --> GCal
+    Executor -->|coding handoff| Cursor
+    Desktop -->|local handoff| Cursor
+
+    PG --> SSE
+    SSE --> Browser
+
+    Vec --- PG
 ```
 
-- The **frontend** (`src/app/`, `src/components/`) is the React app and issues a session JWT on login.
-- The **backend** (`backend/app/`) holds the API routes, agents, integrations, and vector search.
-- **Auth** is demo login or Google OAuth. FastAPI checks the same JWT whether it arrives as a cookie or an `Authorization: Bearer` header.
+### Pipeline stages
 
-Behind that, the two LangGraph pipelines do the work: the intent graph (extract, classify risk, then execute or queue) and the live-notes graph (retrieve context, index the transcript, generate the summary).
+| Stage | What happens |
+|-------|----------------|
+| **Capture** | Manual notes, Slack channel/huddle text, or GitHub issue import append to `CaptureSession` / `Message`. |
+| **Synthesize** | `blaze_pipeline` retrieves related context (pgvector), indexes the transcript, and generates a live summary. |
+| **Recommend** | Intent extraction (todo, GitHub next steps, comment) → `PolicyEngine` classifies risk and persists `AgentAction` rows. |
+| **Act** | Low-risk actions auto-run via `action_executor` + integration adapters. High-risk actions wait for approval in the UI or Slack. |
+| **Handoff** | Approve a coding-agent action → Blaze writes `.blaze/handoffs/*.md` and opens Cursor (desktop app or CLI). |
+
+Write paths call `schedule_session_pipeline` inside the API process — no Redis worker or separate job queue. The frontend subscribes to session updates over SSE (`useSessionStream`).
 
 ## Integrations
 
@@ -317,7 +364,7 @@ No Google OAuth? Use **Enter demo** with `DEV_DEMO_LOGIN=true`.
 4. Connect it under **Settings → Slack**.
 5. Hit **Capture Slack meeting** on the home page and pick a channel.
 
-When a huddle starts (or you invite Blaze into a channel), it spins up a capture session and posts live notes back to Slack. Open that session in Blaze and voice capture uses ElevenLabs Scribe if `ELEVENLABS_API_KEY` is set, or browser speech otherwise.
+When a huddle starts (or you invite Blaze into a channel), it spins up a capture session and posts live notes back to Slack. Channel messages are captured as text and summarized in real time.
 
 ### GitHub
 
@@ -366,9 +413,7 @@ See [desktop/README.md](desktop/README.md) for the details. On cloud deployments
 | Service | Port | Purpose |
 |---------|------|---------|
 | `postgres` | 5432 | Postgres with pgvector (`lefteris` / `lefteris` / `lefteris_os`) |
-| `redis` | 6379 | Background job queue |
 | `api` | 8000 | FastAPI backend container |
-| `worker` | — | Intent extraction worker |
 
 `docker-compose.langfuse.yml` adds self-hosted Langfuse on port 3100 for LLM tracing.
 
@@ -379,7 +424,7 @@ docker compose up postgres -d
 npm run db:setup
 ```
 
-The full API and worker without `run.sh`:
+The full API without `run.sh`:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
@@ -400,7 +445,6 @@ The full template lives in [`.env.example`](.env.example). Every integration key
 | `API_URL` | Local dev | FastAPI URL for the Next.js proxy (default `http://127.0.0.1:8000`) |
 | `DEV_DEMO_LOGIN` | Local | `true` enables the demo login button |
 | `OPENAI_API_KEY` | Your key | LLM + embeddings ([get a key](https://platform.openai.com/)) |
-| `ELEVENLABS_API_KEY` | Your key | Realtime voice for Slack huddles ([get a key](https://elevenlabs.io/)) |
 | `GOOGLE_CLIENT_ID` | Your key | Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | Your key | Google Cloud OAuth secret |
 | `GITHUB_CLIENT_ID` | Your key | GitHub OAuth app |
@@ -409,7 +453,6 @@ The full template lives in [`.env.example`](.env.example). Every integration key
 | `SLACK_CLIENT_ID` | Your key | Slack app client ID |
 | `SLACK_CLIENT_SECRET` | Your key | Slack app client secret |
 | `SLACK_SIGNING_SECRET` | Your key | Slack request signing secret |
-| `REDIS_URL` | Optional | Job queue (needs `npm run worker`) |
 
 ### Secrets and API keys
 

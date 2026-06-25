@@ -14,7 +14,7 @@ from app.models import (
     Message,
 )
 from app.services.agent.action_executor import end_session
-from app.services.agent.live_notes import update_session_live_summary
+from app.queue import schedule_session_pipeline
 from app.services.integrations.slack import fetch_channel_history, get_slack_client
 
 
@@ -124,10 +124,13 @@ async def start_slack_meeting_session(
         await db.flush()
 
         history = await fetch_channel_history(user_id, channel_id, 30)
+        message_ids: list[str] = []
         for msg in history:
+            mid = generate_id()
+            message_ids.append(mid)
             db.add(
                 Message(
-                    id=generate_id(),
+                    id=mid,
                     sessionId=capture_session.id,
                     externalId=msg["externalId"],
                     speaker=msg["speaker"],
@@ -135,10 +138,11 @@ async def start_slack_meeting_session(
                     sentAt=msg["sentAt"],
                 )
             )
+
         await db.commit()
         await db.refresh(capture_session)
 
-    await update_session_live_summary(capture_session.id)
+    schedule_session_pipeline(capture_session.id)
 
     try:
         from app.services.integrations.slack_approvals import post_session_started_notice

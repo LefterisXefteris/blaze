@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { pluginConnected } from "@/lib/integrations";
 
-type Mode = "slack" | "meeting" | "manual" | "github";
+type Mode = "slack" | "manual" | "github";
 
 function parseMode(value?: string): Mode {
-  if (value === "slack" || value === "meeting" || value === "github" || value === "manual") {
+  if (value === "slack" || value === "github" || value === "manual") {
     return value;
   }
   return "slack";
@@ -62,12 +62,6 @@ export function NewSessionForm({ initialMode }: { initialMode?: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channelId: selectedChannel, title }),
         });
-      } else if (mode === "meeting") {
-        res = await fetch("/api/meetings/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, transcript }),
-        });
       } else if (mode === "github") {
         res = await fetch("/api/github/import", {
           method: "POST",
@@ -110,7 +104,6 @@ export function NewSessionForm({ initialMode }: { initialMode?: string }) {
         {(
           [
             ["slack", "Slack"],
-            ["meeting", "Paste transcript"],
             ["manual", "Manual"],
             ["github", "GitHub"],
           ] as const
@@ -206,11 +199,9 @@ export function NewSessionForm({ initialMode }: { initialMode?: string }) {
           </div>
         )}
 
-        {(mode === "manual" || mode === "meeting") && (
+        {mode === "manual" && (
           <div>
-            <label className="text-sm font-medium">
-              {mode === "meeting" ? "Meeting transcript" : "Initial transcript (optional)"}
-            </label>
+            <label className="text-sm font-medium">Initial transcript (optional)</label>
             <textarea
               value={transcript}
               onChange={(e) => setTranscript(e.target.value)}

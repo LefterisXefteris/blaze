@@ -26,7 +26,7 @@ from app.services.integrations.slack_common import (
     slack_meta as _slack_meta,
     truncate as _truncate,
     user_allows_slack_live_notes as _user_allows_slack_live_notes,
-    voice_listen_hint,
+    session_open_hint,
 )
 from app.utils import app_origin
 
@@ -252,10 +252,7 @@ async def post_session_started_notice(session: CaptureSession) -> None:
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": voice_listen_hint(
-                        elevenlabs_configured=bool(settings.elevenlabs_api_key),
-                        session_id=session.id,
-                    ),
+                    "text": session_open_hint(session_id=session.id),
                 }
             ],
         }

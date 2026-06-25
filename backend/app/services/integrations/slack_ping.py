@@ -19,8 +19,7 @@ from app.models import (
 from app.services.integrations.slack import get_slack_client
 from app.services.integrations.slack_approvals import APPROVAL_COMMAND
 from app.services.integrations.slack_meetings import start_slack_meeting_session
-from app.config import get_settings
-from app.services.integrations.slack_common import voice_listen_hint
+from app.services.integrations.slack_common import session_open_hint
 from app.utils import app_origin
 
 # channel_id -> last response unix time
@@ -71,16 +70,8 @@ async def _active_session(user_id: str, channel_id: str) -> CaptureSession | Non
 
 
 def _ping_reply(session: CaptureSession | None, *, started: bool) -> str:
-    settings = get_settings()
     url = f"{app_origin()}/sessions/{session.id}" if session else app_origin()
-    voice = (
-        voice_listen_hint(
-            elevenlabs_configured=bool(settings.elevenlabs_api_key),
-            session_id=session.id,
-        )
-        if session
-        else ""
-    )
+    open_hint = session_open_hint(session_id=session.id) if session else ""
     if started:
         base = (
             f"I'm here — live notes are on for this channel. "
@@ -93,7 +84,7 @@ def _ping_reply(session: CaptureSession | None, *, started: bool) -> str:
             f"Keep typing and I'll keep summarizing. "
             f"<{url}|Open in Blaze>"
         )
-    return f"{base}\n{voice}" if voice else base
+    return f"{base}\n{open_hint}" if open_hint else base
 
 
 async def try_handle_blaze_ping(

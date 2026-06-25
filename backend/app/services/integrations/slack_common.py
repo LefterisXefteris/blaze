@@ -39,14 +39,6 @@ async def user_allows_slack_live_notes(user_id: str) -> bool:
     return meta.get("slackLiveNotes", True) is not False
 
 
-def voice_listen_hint(*, elevenlabs_configured: bool, session_id: str) -> str:
+def session_open_hint(*, session_id: str) -> str:
     url = f"{app_origin()}/sessions/{session_id}"
-    if elevenlabs_configured:
-        return (
-            f"🎙 *Voice:* open <{url}|Blaze> and keep the tab open — "
-            f"I'll listen with *ElevenLabs Scribe* and post lines here + in live notes."
-        )
-    return (
-        f"🎙 *Voice:* open <{url}|Blaze> and allow mic access — "
-        f"add `ELEVENLABS_API_KEY` for best quality (falls back to browser speech)."
-    )
+    return f"Open <{url}|Blaze> to view live notes and suggested actions."

@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/api/dev/demo-login",
   "/api/auth/signout",
   "/api/slack/events",
+  "/api/slack/interactions",
   "/api/github/webhook",
 ];
 

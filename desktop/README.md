@@ -23,7 +23,7 @@ Tauri companion app for the Blaze monorepo. It wraps the Blaze web UI and owns *
 
 | Layer | Role |
 |-------|------|
-| **Next.js** | Notepad-first UI (`/notes`), inbox, sessions, approvals |
+| **Next.js** | Notepad-first UI (`/notes`), inbox, sessions, approvals — autosaves and live summary via SSE |
 | **FastAPI** | API, agents, Slack/GitHub, handoff markdown generation |
 | **Desktop** | Poll confirmed handoffs, write `.blaze/handoffs/`, open Cursor, drop `.cursor/rules` |
 
@@ -60,7 +60,7 @@ npm run dev              # from repo root
 npm run tauri:dev        # from desktop/
 ```
 
-On first launch the **notepad** opens automatically. Use the tray menu for **Desktop settings** (API URL, handoff paths).
+On first launch the **notepad** opens automatically. The `/notes` editor autosaves as you type and streams live AI summaries and GitHub context over SSE — same as in the browser. Use the tray menu for **Desktop settings** (API URL, handoff paths).
 
 1. Run `npm run dev:all` from the repo root (API + web).
 2. Log in from the notepad window (demo or Google).

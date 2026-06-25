@@ -45,7 +45,6 @@ class Settings(BaseSettings):
     jwt_secret: str
 
     app_url: str = "http://localhost:3010"
-    redis_url: str | None = None
 
     google_client_id: str | None = None
     google_client_secret: str | None = None
@@ -100,7 +99,6 @@ def get_settings() -> Settings:
             "http://localhost:3000",
             "http://localhost:3001",
         ],
-        redis_url=os.environ.get("REDIS_URL"),
         google_client_id=os.environ.get("GOOGLE_CLIENT_ID"),
         google_client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
         github_client_id=os.environ.get("GITHUB_CLIENT_ID"),

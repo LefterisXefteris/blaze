@@ -10,6 +10,9 @@ import { NotesShell } from "@/components/notes-shell";
 import { NoteSourceBadge } from "@/components/note-source-badge";
 import { NoteAgentPanel } from "@/components/note-agent-panel";
 import { NoteDeleteButton } from "@/components/note-delete-button";
+import { LiveSummaryBlock } from "@/components/live-summary-block";
+import { RelatedContextCompact } from "@/components/related-context-compact";
+import { useSessionStream } from "@/hooks/use-session-stream";
 
 type MatchedIssue = {
   id: string;
@@ -125,13 +128,21 @@ export function NotesEditor() {
   const [queuedJobCount, setQueuedJobCount] = useState(0);
 
   const matchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedSnapshotRef = useRef({ title: "", content: "" });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingProcessRef = useRef(false);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastMatchedTextRef = useRef("");
   const MATCH_MIN_CHARS = 80;
   const MATCH_DEBOUNCE_MS = 1200;
+  const SAVE_DEBOUNCE_MS = 1500;
+
+  const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
+
+  const { liveSummary, relatedContext, agentActions } = useSessionStream(
+    sessionId,
+    Boolean(sessionId)
+  );
 
   const markDirty = useCallback((nextTitle: string, nextContent: string) => {
     const snap = savedSnapshotRef.current;
@@ -165,40 +176,19 @@ export function NotesEditor() {
     }
   }, []);
 
-  const pollForActions = useCallback(
-    async (expectedCount: number, sid: string) => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
-      let attempts = 0;
-      const maxAttempts = 20;
-
-      pollTimerRef.current = setInterval(async () => {
-        attempts += 1;
-        const res = await fetch(`/api/notes/actions?session_id=${sid}`);
-        if (res.ok) {
-          const actions = await res.json();
-          const pending = actions.filter((a: { status: string }) => a.status === "PENDING");
-          if (pending.length >= expectedCount || attempts >= maxAttempts) {
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-            pollTimerRef.current = null;
-            setAnalyzing(false);
-            setAwaitingProceed(pending.length > 0);
-            setPendingActionCount(pending.length);
-            setConfirmRefresh((n) => n + 1);
-          }
-        } else if (attempts >= maxAttempts) {
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
-          setAnalyzing(false);
-        }
-      }, 1500);
-    },
-    []
-  );
-
   const saveNote = useCallback(
-    async (sid: string, noteTitle: string, noteContent: string): Promise<boolean> => {
-      setSaveState("saving");
+    async (
+      sid: string,
+      noteTitle: string,
+      noteContent: string,
+      options?: { quiet?: boolean }
+    ): Promise<boolean> => {
+      const quiet = options?.quiet ?? false;
+      if (quiet) {
+        setAutosaveState("saving");
+      } else {
+        setSaveState("saving");
+      }
       const res = await fetch(`/api/sessions/${sid}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -208,14 +198,20 @@ export function NotesEditor() {
         }),
       });
       if (!res.ok) {
-        setSaveState("idle");
+        if (quiet) setAutosaveState("idle");
+        else setSaveState("idle");
         return false;
       }
       savedSnapshotRef.current = { title: noteTitle, content: noteContent };
       setIsDirty(false);
       setLastSavedAt(new Date());
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 2500);
+      if (quiet) {
+        setAutosaveState("saved");
+        setTimeout(() => setAutosaveState("idle"), 2000);
+      } else {
+        setSaveState("saved");
+        setTimeout(() => setSaveState("idle"), 2500);
+      }
       return true;
     },
     []
@@ -258,7 +254,7 @@ export function NotesEditor() {
         setProcessMessage(data.message ?? null);
 
         if ((data.queued ?? 0) > 0) {
-          pollForActions(data.queued, sid);
+          setAnalyzing(true);
         } else {
           setAnalyzing(false);
         }
@@ -266,7 +262,7 @@ export function NotesEditor() {
         setAnalyzing(false);
       }
     },
-    [saveNote, pollForActions]
+    [saveNote]
   );
 
   const refreshPendingCount = useCallback(async (sid?: string) => {
@@ -404,6 +400,11 @@ export function NotesEditor() {
     const fullNote = [title, content].filter(Boolean).join("\n");
     if (!fullNote.trim()) return;
 
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
     const ok = await saveNote(sessionId, title, content);
     if (!ok) return;
 
@@ -463,13 +464,40 @@ export function NotesEditor() {
 
   useEffect(() => {
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, []);
 
   useEffect(() => {
     initSession();
   }, [initSession]);
+
+  useEffect(() => {
+    if (!sessionId || loading) return;
+
+    const snap = savedSnapshotRef.current;
+    if (title === snap.title && content === snap.content) return;
+    if (!title.trim() && !content.trim()) return;
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void saveNote(sessionId, title, content, { quiet: true });
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [sessionId, title, content, loading, saveNote]);
+
+  useEffect(() => {
+    const pending = agentActions.filter((a) => a.status === "PENDING").length;
+    if (pending > 0) {
+      setPendingActionCount(pending);
+      setAwaitingProceed(true);
+      setAnalyzing(false);
+      setConfirmRefresh((n) => n + 1);
+    }
+  }, [agentActions]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -562,7 +590,13 @@ export function NotesEditor() {
   }
 
   const showAgentPanel =
-    pendingActionCount > 0 || analyzing || awaitingProceed;
+    pendingActionCount > 0 ||
+    analyzing ||
+    awaitingProceed ||
+    agentActions.some((a) => a.status === "PENDING");
+
+  const isUpdatingSummary =
+    autosaveState === "saving" && !liveSummary.trim() && hasNoteContent;
 
   return (
     <NotesShell
@@ -580,15 +614,38 @@ export function NotesEditor() {
             <h2 className="text-sm font-semibold">Context</h2>
             <p className="text-xs text-muted mt-1 leading-relaxed">
               {hasNoteContent
-                ? "Issues matched from your note"
+                ? "Live summary and GitHub issues from your note"
                 : "Write or paste a transcript to surface related issues"}
             </p>
           </div>
 
+          {(liveSummary || isUpdatingSummary) && (
+            <section className="notes-context-section">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="notes-context-section-title">Live notes</h3>
+                {isUpdatingSummary && (
+                  <span className="text-xs text-muted animate-pulse">Updating…</span>
+                )}
+              </div>
+              {liveSummary ? (
+                <LiveSummaryBlock liveSummary={liveSummary} />
+              ) : (
+                <p className="text-xs text-muted leading-relaxed py-1">
+                  Blaze is summarizing your note…
+                </p>
+              )}
+            </section>
+          )}
+
+          <section className="notes-context-section">
+            <h3 className="notes-context-section-title mb-2">Related context</h3>
+            <RelatedContextCompact relatedContext={relatedContext} />
+          </section>
+
           {showMatchedSection && (
             <section className="notes-context-section">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="notes-context-section-title">From your note</h3>
+                <h3 className="notes-context-section-title">GitHub issues</h3>
                 {matching && (
                   <span className="text-xs text-muted animate-pulse">Matching…</span>
                 )}
@@ -621,10 +678,17 @@ export function NotesEditor() {
             data-state={saveState}
             data-dirty={isDirty ? "true" : "false"}
           >
-            {saveState === "saving" && "Saving…"}
-            {saveState === "saved" && "Saved"}
-            {saveState === "idle" && isDirty && "Unsaved changes"}
-            {saveState === "idle" && !isDirty && lastSavedAt && (
+            {saveState === "saving" || autosaveState === "saving" ? "Saving…" : null}
+            {saveState === "saved" ? "Saved" : null}
+            {saveState === "idle" && autosaveState === "saved" ? "Saved" : null}
+            {saveState === "idle" &&
+              autosaveState === "idle" &&
+              isDirty &&
+              "Unsaved changes"}
+            {saveState === "idle" &&
+              autosaveState === "idle" &&
+              !isDirty &&
+              lastSavedAt && (
               <span className="hidden sm:inline">
                 Saved {formatDistanceToNow(lastSavedAt, { addSuffix: true })}
               </span>
@@ -705,6 +769,7 @@ export function NotesEditor() {
         {sessionId && showAgentPanel && (
           <NoteAgentPanel
             sessionId={sessionId}
+            actions={agentActions}
             analyzing={analyzing}
             awaitingProceed={awaitingProceed}
             queuedJobCount={queuedJobCount}
@@ -721,7 +786,7 @@ export function NotesEditor() {
           value={content}
           onChange={handleContentChange}
           onPaste={handlePaste}
-          placeholder="Paste a meeting transcript — context and agent jobs appear on the right…"
+          placeholder="Start typing — live notes and related GitHub issues appear on the right…"
           className="notes-textarea"
           spellCheck
         />
