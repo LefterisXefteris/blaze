@@ -4,9 +4,9 @@
 
 # Blaze
 
-**Data residency is key for your project.**
+**What gets decided shouldn't die in the transcript.**
 
-Meeting notes that turn into actions — on your infrastructure, with your keys.
+Self-hosted, open source — your meetings stay on your stack, and the follow-up actually runs.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-f97316.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
