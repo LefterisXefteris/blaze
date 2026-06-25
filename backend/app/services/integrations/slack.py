@@ -18,7 +18,7 @@ from app.models import (
     IntegrationProvider,
     Message,
 )
-from app.queue import enqueue_intent_extraction, schedule_live_notes_update
+from app.queue import schedule_session_pipeline
 
 
 async def get_slack_client(user_id: str) -> WebClient | None:
@@ -225,20 +225,17 @@ async def handle_slack_message(
                 except Exception:
                     speaker = message["user"]
 
-            db.add(
-                Message(
-                    id=generate_id(),
-                    sessionId=session.id,
-                    externalId=message["ts"],
-                    speaker=speaker,
-                    content=message["text"],
-                    sentAt=datetime.fromtimestamp(float(message["ts"]), tz=timezone.utc),
-                )
+            msg = Message(
+                id=generate_id(),
+                sessionId=session.id,
+                externalId=message["ts"],
+                speaker=speaker,
+                content=message["text"],
+                sentAt=datetime.fromtimestamp(float(message["ts"]), tz=timezone.utc),
             )
+            db.add(msg)
             await db.commit()
-
-        await enqueue_intent_extraction(session.id)
-        schedule_live_notes_update(session.id)
+            schedule_session_pipeline(session.id)
 
 
 def verify_slack_signature(

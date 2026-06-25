@@ -66,8 +66,9 @@ SLACK_SIGNING_SECRET="..."`}</pre>
           <li>Restart <code>npm run dev</code>, then click Connect Slack below</li>
           <li>
             (Required for live capture) <strong>Event Subscriptions</strong> → Enable → Request
-            URL: <code className="text-xs break-all">{slackEventsUrl}</code> — use ngrok for
-            local dev
+            URL: <code className="text-xs break-all">{slackEventsUrl}</code> — for local dev,
+            expose with ngrok on <strong>:3010</strong> (this app, proxies to the API) or{" "}
+            <strong>:8000</strong> (API direct)
           </li>
           <li>
             <strong>Interactivity</strong> → Enable → Request URL:{" "}

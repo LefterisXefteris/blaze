@@ -12,25 +12,19 @@ from app.models import (
     AgentAction,
     AgentActionStatus,
     CaptureSession,
-    CaptureSessionStatus,
-    CaptureSourceType,
     IntentType,
-    Note,
     PriorityItem,
 )
-from app.types import SessionMessage
-from app.services.agent.extractor import generate_note
-from app.services.agent.graphs.intent_graph import run_intent_graph
-from app.services.integrations.github import add_issue_labels, post_issue_comment
-from app.services.integrations.google_calendar import (
-    create_calendar_event,
-    delete_calendar_event,
-)
-from app.services.vector.indexer import index_meeting_session
+from app.services.integrations.adapters import get_adapter
+from app.services.integrations.github import add_issue_labels
+from app.services.integrations.google_calendar import delete_calendar_event
 
 
 async def process_session_intents(session_id: str) -> list[dict[str, Any]]:
-    return await run_intent_graph(session_id)
+    from app.services.agent.blaze_pipeline import process_session
+
+    await process_session(session_id)
+    return []
 
 
 async def execute_github_ack_comment(
@@ -60,7 +54,7 @@ async def execute_github_ack_comment(
         return {"success": False, "message": "Missing ack comment data"}
 
     try:
-        comment = await post_issue_comment(
+        comment = await get_adapter("GITHUB").post_issue_comment(
             user_id,
             payload["repo"],
             payload["issueNumber"],
@@ -114,7 +108,7 @@ async def execute_action(
 
     try:
         if action.intentType == IntentType.CALENDAR_EVENT:
-            event = await create_calendar_event(
+            event = await get_adapter("GOOGLE_CALENDAR").create_calendar_event(
                 user_id,
                 {
                     "title": payload.get("title"),
@@ -248,7 +242,7 @@ async def confirm_action(
                 or payload.get("description")
                 or payload.get("title")
             )
-            comment = await post_issue_comment(
+            comment = await get_adapter("GITHUB").post_issue_comment(
                 user_id,
                 payload["repo"],
                 payload["issueNumber"],
@@ -285,7 +279,7 @@ async def confirm_action(
                     or payload.get("summary")
                     or payload.get("title")
                 )
-                comment = await post_issue_comment(
+                comment = await get_adapter("GITHUB").post_issue_comment(
                     user_id,
                     payload["repo"],
                     payload["issueNumber"],
@@ -433,87 +427,6 @@ async def undo_action(action_id: str, user_id: str) -> dict[str, Any]:
 
 
 async def end_session(session_id: str, user_id: str) -> dict[str, Any]:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(CaptureSession)
-            .options(
-                selectinload(CaptureSession.messages),
-                selectinload(CaptureSession.agentActions),
-            )
-            .where(CaptureSession.id == session_id, CaptureSession.userId == user_id)
-        )
-        session = result.scalar_one_or_none()
+    from app.services.agent.blaze_pipeline import finalize_session
 
-    if not session:
-        raise RuntimeError("Session not found")
-
-    messages = [
-        SessionMessage(
-            id=m.id,
-            speaker=m.speaker,
-            content=m.content,
-            sentAt=m.sentAt,
-        )
-        for m in session.messages
-    ]
-
-    actions_data = [
-        {
-            "type": a.intentType.value,
-            "title": (a.payload or {}).get("title") or a.intentType.value,
-            "status": a.status.value,
-        }
-        for a in session.agentActions
-    ]
-
-    note_data = await generate_note(messages, session.userNotes, actions_data)
-
-    async with AsyncSessionLocal() as db:
-        session_result = await db.execute(
-            select(CaptureSession).where(CaptureSession.id == session_id)
-        )
-        row = session_result.scalar_one()
-        row.status = CaptureSessionStatus.ENDED
-        row.endedAt = datetime.now(timezone.utc)
-
-        note_result = await db.execute(select(Note).where(Note.sessionId == session_id))
-        note = note_result.scalar_one_or_none()
-        if note:
-            note.aiSummary = note_data["aiSummary"]
-            note.structured = note_data["structured"]
-        else:
-            db.add(
-                Note(
-                    id=generate_id(),
-                    sessionId=session_id,
-                    aiSummary=note_data["aiSummary"],
-                    structured=note_data["structured"],
-                )
-            )
-        await db.commit()
-
-    source_type = session.sourceType
-    if source_type in (
-        CaptureSourceType.MEETING,
-        CaptureSourceType.SLACK,
-        CaptureSourceType.MANUAL,
-    ):
-        try:
-            await index_meeting_session(
-                user_id=user_id,
-                session_id=session_id,
-                title=session.title,
-                ai_summary=note_data["aiSummary"],
-                structured=note_data.get("structured"),
-            )
-        except Exception as error:
-            print(f"Meeting index on end failed for {session_id}: {error}")
-
-    try:
-        from app.services.integrations.slack_approvals import post_session_ended_summary
-
-        await post_session_ended_summary(user_id, session, note_data["aiSummary"])
-    except Exception as error:
-        print(f"Slack end summary failed for {session_id}: {error}")
-
-    return note_data
+    return await finalize_session(session_id, user_id)

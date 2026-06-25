@@ -7,8 +7,6 @@ from app.auth import AppSession, ensure_db_user, require_auth
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models import CaptureSession, CaptureSourceType, Message
-from app.queue import enqueue_intent_extraction
-from app.services.agent.live_notes import update_session_live_summary
 from app.services.integrations.slack import handle_slack_message, list_slack_channels, verify_slack_signature
 from app.services.integrations.slack_approvals import (
     handle_slack_interaction,
@@ -46,8 +44,6 @@ async def start_channel_session(body: dict[str, Any], session: AppSession = Depe
         huddle=False,
         auto_started=False,
     )
-    await enqueue_intent_extraction(capture.id)
-    await update_session_live_summary(capture.id)
     return serialize_model(capture)
 
 

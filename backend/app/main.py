@@ -9,13 +9,11 @@ from app.routers import (
     context,
     integrations,
     local,
-    meetings,
     notes,
     priority,
     recipes,
     sessions,
     slack,
-    transcription,
 )
 
 
@@ -42,12 +40,10 @@ def create_app() -> FastAPI:
     app.include_router(actions.router)
     app.include_router(priority.router)
     app.include_router(recipes.router)
-    app.include_router(meetings.router)
     app.include_router(context.router)
     app.include_router(integrations.router)
     app.include_router(local.router)
     app.include_router(slack.router)
-    app.include_router(transcription.router)
 
     @app.get("/health")
     async def health():

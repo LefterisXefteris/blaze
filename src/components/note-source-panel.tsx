@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { LinkedPriorityItem, TranscriptMessage } from "@/lib/note-source-types";
 import { REASON_LABELS } from "@/lib/note-source-types";
 import { NoteTranscript } from "@/components/note-transcript";
+import { LiveSummaryBlock } from "@/components/live-summary-block";
 
 type NoteSourcePanelProps = {
   sourceType: string;
@@ -18,35 +19,6 @@ type NoteSourcePanelProps = {
   scratchDisabled?: boolean;
   children?: ReactNode;
 };
-
-function LiveSummaryBlock({ liveSummary }: { liveSummary: string }) {
-  return (
-    <div className="notes-source-live-summary text-sm leading-relaxed whitespace-pre-wrap">
-      {liveSummary.split("\n").map((line, i) => {
-        if (line.startsWith("**") && line.endsWith("**")) {
-          return (
-            <p key={i} className="font-semibold text-foreground mt-2 first:mt-0">
-              {line.replace(/\*\*/g, "")}
-            </p>
-          );
-        }
-        if (line.startsWith("• ") || line.startsWith("- ")) {
-          return (
-            <p key={i} className="pl-1 text-foreground">
-              {line}
-            </p>
-          );
-        }
-        if (line.trim() === "") return <br key={i} />;
-        return (
-          <p key={i} className="text-foreground">
-            {line}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 function GitHubSourceBlock({
   priorityItems,
@@ -171,7 +143,7 @@ export function NoteSourcePanel({
           />
           {sourceType === "SLACK" && (
             <p className="notes-section-footnote mt-2">
-              Voice lines appear here when ElevenLabs Scribe is configured.
+              Channel messages are captured as text in real time.
             </p>
           )}
         </section>

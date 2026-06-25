@@ -1,42 +1,17 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { InlineSpinner } from "@/components/ui/skeletons";
 import { NotesShell } from "@/components/notes-shell";
 import { NoteSourceBadge } from "@/components/note-source-badge";
 import { NoteSourcePanel } from "@/components/note-source-panel";
 import { NoteAgentPanel } from "@/components/note-agent-panel";
 import { NoteDeleteButton } from "@/components/note-delete-button";
+import { useSessionStream } from "@/hooks/use-session-stream";
 import type { LinkedPriorityItem } from "@/lib/note-source-types";
-
-const LiveMicCapture = dynamic(
-  () => import("./live-mic-capture").then((m) => ({ default: m.LiveMicCapture })),
-  {
-    ssr: false,
-    loading: () => <InlineSpinner label="Loading mic…" />,
-  }
-);
-
-type Message = {
-  id: string;
-  speaker: string;
-  content: string;
-  sentAt: string;
-};
-
-type Action = {
-  id: string;
-  intentType: string;
-  riskLevel: string;
-  status: string;
-  payload: { title?: string; description?: string };
-  undoExpiresAt?: string | null;
-  createdAt: string;
-};
+import type { RelatedContext, StreamAction, StreamMessage } from "@/lib/session-stream-types";
 
 type SessionData = {
   id: string;
@@ -47,28 +22,9 @@ type SessionData = {
   sourceType: string;
   sourceRef: string | null;
   startedAt: string;
-  messages: Message[];
-  agentActions: Action[];
+  messages: StreamMessage[];
+  agentActions: StreamAction[];
   priorityItems?: LinkedPriorityItem[];
-};
-
-type RelatedContextHit = {
-  sourceType: string;
-  sourceRef: string | null;
-  purpose: string | null;
-  content: string;
-  similarity: number;
-  linkReason: string;
-  metadata?: {
-    externalUrl?: string;
-    sessionId?: string;
-    repo?: string;
-  };
-};
-
-type RelatedContext = {
-  hits: RelatedContextHit[];
-  updatedAt: string;
 };
 
 function RelatedContextPanel({
@@ -152,16 +108,17 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
   const [userNotes, setUserNotes] = useState("");
-  const [liveSummary, setLiveSummary] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
-  const [relatedContext, setRelatedContext] = useState<RelatedContext | null>(null);
+  const [initialRelatedContext, setInitialRelatedContext] = useState<RelatedContext | null>(
+    null
+  );
 
   const fetchRelatedContext = useCallback(async () => {
     const res = await fetch(`/api/sessions/${sessionId}/context`);
     if (res.ok) {
-      setRelatedContext(await res.json());
+      setInitialRelatedContext(await res.json());
     }
   }, [sessionId]);
 
@@ -171,10 +128,55 @@ export function SessionView({ sessionId }: { sessionId: string }) {
       const data = await res.json();
       setSession(data);
       setUserNotes(data.userNotes ?? "");
-      setLiveSummary(data.liveSummary ?? "");
     }
     setLoading(false);
   }, [sessionId]);
+
+  const streamHandlers = useMemo(
+    () => ({
+      onInit: (data: {
+        messages: StreamMessage[];
+        actions: StreamAction[];
+        userNotes: string;
+        liveSummary: string;
+      }) => {
+        setSession((prev) =>
+          prev
+            ? {
+                ...prev,
+                messages: data.messages,
+                agentActions: data.actions,
+                userNotes: data.userNotes,
+                liveSummary: data.liveSummary ?? "",
+              }
+            : prev
+        );
+        setUserNotes(data.userNotes);
+      },
+      onMessages: (msgs: StreamMessage[]) => {
+        setSession((prev) =>
+          prev ? { ...prev, messages: [...prev.messages, ...msgs] } : prev
+        );
+      },
+      onActions: (actions: StreamAction[]) => {
+        setSession((prev) =>
+          prev
+            ? { ...prev, agentActions: [...actions, ...prev.agentActions] }
+            : prev
+        );
+      },
+      onEnd: () => {
+        fetchSession().then(() => router.push(`/notes/${sessionId}`));
+      },
+    }),
+    [fetchSession, router, sessionId]
+  );
+
+  const { liveSummary, relatedContext, remoteUserNotes } = useSessionStream(
+    sessionId,
+    session?.status === "ACTIVE",
+    streamHandlers
+  );
 
   useEffect(() => {
     fetchSession();
@@ -182,64 +184,10 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   }, [fetchSession, fetchRelatedContext]);
 
   useEffect(() => {
-    if (!session || session.status !== "ACTIVE") return;
-
-    const es = new EventSource(`/api/sessions/${sessionId}/stream`);
-
-    es.addEventListener("init", (e) => {
-      const data = JSON.parse(e.data);
-      setSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              messages: data.messages,
-              agentActions: data.actions,
-              userNotes: data.userNotes,
-              liveSummary: data.liveSummary ?? "",
-            }
-          : prev
-      );
-      setUserNotes(data.userNotes);
-      setLiveSummary(data.liveSummary ?? "");
-    });
-
-    es.addEventListener("messages", (e) => {
-      const msgs = JSON.parse(e.data);
-      setSession((prev) =>
-        prev ? { ...prev, messages: [...prev.messages, ...msgs] } : prev
-      );
-    });
-
-    es.addEventListener("actions", (e) => {
-      const actions = JSON.parse(e.data);
-      setSession((prev) =>
-        prev
-          ? { ...prev, agentActions: [...actions, ...prev.agentActions] }
-          : prev
-      );
-    });
-
-    es.addEventListener("notes", (e) => {
-      const data = JSON.parse(e.data);
-      setUserNotes(data.userNotes);
-    });
-
-    es.addEventListener("liveSummary", (e) => {
-      const data = JSON.parse(e.data);
-      setLiveSummary(data.liveSummary);
-    });
-
-    es.addEventListener("relatedContext", (e) => {
-      setRelatedContext(JSON.parse(e.data));
-    });
-
-    es.addEventListener("end", () => {
-      es.close();
-      fetchSession().then(() => router.push(`/notes/${sessionId}`));
-    });
-
-    return () => es.close();
-  }, [sessionId, session?.status, fetchSession, router]);
+    if (remoteUserNotes !== null) {
+      setUserNotes(remoteUserNotes);
+    }
+  }, [remoteUserNotes]);
 
   const saveNotes = async () => {
     await fetch(`/api/sessions/${sessionId}`, {
@@ -278,7 +226,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   const handleAction = async (
     actionId: string,
     operation: string,
-    payload?: Action["payload"]
+    payload?: StreamAction["payload"]
   ) => {
     const res = await fetch("/api/actions", {
       method: "PATCH",
@@ -318,6 +266,9 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     return <div className="p-8 text-muted">Session not found</div>;
   }
 
+  const displayLiveSummary = liveSummary || session.liveSummary || "";
+  const displayRelatedContext = relatedContext ?? initialRelatedContext;
+
   const isActive = session.status === "ACTIVE";
   const isMeetingCapture =
     session.sourceType === "SLACK" || session.sourceType === "MEETING";
@@ -349,19 +300,12 @@ export function SessionView({ sessionId }: { sessionId: string }) {
             sourceType={session.sourceType}
             sourceRef={session.sourceRef}
             messages={session.messages}
-            liveSummary={liveSummary || undefined}
+            liveSummary={displayLiveSummary || undefined}
             userNotes={userNotes}
             scratchEditable
             onScratchChange={setUserNotes}
             onScratchSave={saveNotes}
           >
-            <section className="notes-context-section">
-              <LiveMicCapture
-                sessionId={sessionId}
-                onTranscript={fetchSession}
-                autoStart={session.sourceType === "SLACK"}
-              />
-            </section>
             {session.sourceType === "SLACK" && (
               <section className="notes-context-section">
                 <div className="flex gap-2">
@@ -383,7 +327,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
               </section>
             )}
             <section className="notes-context-section">
-              <RelatedContextPanel relatedContext={relatedContext} />
+              <RelatedContextPanel relatedContext={displayRelatedContext} />
             </section>
           </NoteSourcePanel>
         }
@@ -433,7 +377,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
           sourceRef={session.sourceRef}
           messages={session.messages}
           priorityItems={session.priorityItems ?? []}
-          liveSummary={liveSummary || undefined}
+          liveSummary={displayLiveSummary || undefined}
           userNotes={userNotes}
           scratchEditable={isActive}
           onScratchChange={setUserNotes}

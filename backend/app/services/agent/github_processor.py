@@ -20,7 +20,7 @@ from app.models import (
     PriorityItem,
     RiskLevel,
 )
-from app.queue import enqueue_intent_extraction
+from app.queue import schedule_session_pipeline
 from app.services.agent.action_executor import execute_github_ack_comment
 from app.services.agent.github_extractor import (
     extract_github_intents,
@@ -381,7 +381,7 @@ async def ingest_github_item(
             session_id, repo, number, issue["title"], messages
         )
 
-    await enqueue_intent_extraction(session_id)
+    schedule_session_pipeline(session_id)
 
     try:
         await index_github_session(

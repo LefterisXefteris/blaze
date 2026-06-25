@@ -17,7 +17,6 @@
     "db:setup": "docker compose up postgres -d && sleep 2 && npm run db:push && npm run db:vectors",
     "db:studio": "prisma studio",
     "mcp": "tsx src/mcp/server.ts",
-    "worker": "cd backend && .venv/bin/python worker.py",
     "blaze": "cd backend && .venv/bin/python blaze.py",
     "desktop:dev": "cd desktop && npm run tauri:dev",
     "desktop:build": "cd desktop && npm run tauri:build",

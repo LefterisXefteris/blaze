@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.core.ids import generate_id
 from app.database import AsyncSessionLocal
 from app.models import CaptureSession, CaptureSessionStatus, CaptureSourceType
-from app.queue import enqueue_intent_extraction, schedule_live_notes_update
+from app.queue import schedule_session_pipeline
 from app.repositories.messages import MessageRepository
 from app.repositories.sessions import SessionRepository
 from app.schemas.sessions import AppendSessionBody, CreateSessionBody, PatchSessionBody
@@ -74,7 +74,7 @@ class SessionService:
         if body.transcript:
             self._messages.add_from_transcript(capture.id, body.transcript)
             await self._sessions.commit()
-            await enqueue_intent_extraction(capture.id)
+            schedule_session_pipeline(capture.id)
 
         return serialize_model(capture)
 
@@ -126,7 +126,7 @@ class SessionService:
         await self._sessions.refresh(capture)
 
         if "userNotes" in fields_set:
-            schedule_live_notes_update(session_id)
+            schedule_session_pipeline(session_id)
 
         return serialize_model(capture)
 
@@ -146,18 +146,7 @@ class SessionService:
             self._messages.add_single(session_id, body.speaker, body.content)
 
         await self._sessions.commit()
-
-        await enqueue_intent_extraction(session_id)
-        schedule_live_notes_update(session_id)
-
-        if body.source == "voice" and body.content:
-            from app.services.integrations.slack_voice import notify_slack_voice_line
-
-            await notify_slack_voice_line(
-                session_id,
-                str(body.speaker or "You"),
-                str(body.content),
-            )
+        schedule_session_pipeline(session_id)
 
         return await self._session_messages_payload(session_id)
 

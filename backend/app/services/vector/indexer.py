@@ -112,6 +112,49 @@ async def index_meeting_session(
     await index_chunks(inputs)
 
 
+async def index_live_meeting_transcript_incremental(
+    user_id: str,
+    session_id: str,
+    user_notes: str,
+    messages: list[dict[str, str]],
+    title: str | None = None,
+    message_ids: list[str] | None = None,
+) -> None:
+    """Incremental live index — upserts chunk 0 without full delete."""
+    if not messages and not user_notes.strip():
+        return
+
+    transcript = "\n".join(
+        f"{m['speaker']}: {m['content']}" for m in messages[-20:]
+    )
+    content_parts = [
+        f"Meeting: {title}" if title else None,
+        f"Notes:\n{user_notes.strip()}" if user_notes.strip() else None,
+        f"Recent transcript:\n{transcript}" if transcript else None,
+    ]
+    content = "\n\n".join(p for p in content_parts if p)
+    purpose = f"Live meeting: {title}" if title else "Live meeting in progress"
+
+    from app.services.vector.store import upsert_context_chunk
+
+    await upsert_context_chunk(
+        IndexChunkInput(
+            userId=user_id,
+            sourceType="MEETING",
+            sourceId=session_id,
+            sourceRef=None,
+            chunkIndex=0,
+            content=content,
+            purpose=purpose,
+            metadata={
+                "sessionId": session_id,
+                "live": True,
+                "messageIds": message_ids or [],
+            },
+        )
+    )
+
+
 async def index_live_meeting_transcript(
     user_id: str,
     session_id: str,
