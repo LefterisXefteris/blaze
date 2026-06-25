@@ -197,5 +197,24 @@ def get_live_notes_graph():
 
 
 async def run_live_notes_graph(session_id: str) -> None:
+    from app.services.llm.observability import (
+        langfuse_enabled,
+        load_session_trace_context,
+        should_trace_live_notes,
+        trace_graph_run,
+    )
+
     graph = get_live_notes_graph()
-    await graph.ainvoke({"session_id": session_id})
+    trace_ctx = await load_session_trace_context(session_id)
+
+    if langfuse_enabled() and should_trace_live_notes():
+        with trace_graph_run(
+            graph_name="live_notes_graph",
+            session_id=trace_ctx["session_id"] or session_id,
+            user_id=trace_ctx.get("user_id"),
+            source_type=trace_ctx.get("source_type"),
+            session_title=trace_ctx.get("session_title"),
+        ) as config:
+            await graph.ainvoke({"session_id": session_id}, config=config)
+    else:
+        await graph.ainvoke({"session_id": session_id})

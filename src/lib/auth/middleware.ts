@@ -14,11 +14,16 @@ const PUBLIC_PATHS = [
   "/api/auth/signout",
   "/api/slack/events",
   "/api/github/webhook",
-  "/api/integrations/slack/callback",
-  "/api/integrations/github/callback",
 ];
 
+function isIntegrationOAuthCallback(pathname: string) {
+  return /^\/api\/integrations\/[^/]+\/callback$/.test(pathname);
+}
+
 function isPublicPath(pathname: string) {
+  if (isIntegrationOAuthCallback(pathname)) {
+    return true;
+  }
   return PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
@@ -26,6 +31,14 @@ function isPublicPath(pathname: string) {
 
 function isAuthPage(pathname: string) {
   return pathname === "/login" || pathname.startsWith("/auth/");
+}
+
+function isApiPath(pathname: string) {
+  return pathname.startsWith("/api/");
+}
+
+function unauthorizedApiResponse() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
 export async function updateSession(request: NextRequest) {
@@ -52,6 +65,11 @@ export async function updateSession(request: NextRequest) {
       const claims = await verifyAccessToken(token);
       userId = claims.sub;
     } catch {
+      if (isApiPath(pathname)) {
+        const response = unauthorizedApiResponse();
+        clearAllAuthCookies(response, request);
+        return response;
+      }
       if (isAuthPage(pathname)) {
         const response = NextResponse.next();
         clearAllAuthCookies(response, request);
@@ -67,6 +85,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (!userId && !isPublicPath(pathname)) {
+    if (isApiPath(pathname)) {
+      return unauthorizedApiResponse();
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

@@ -1,12 +1,10 @@
-import type { ConnectionPlugin } from "../types";
 import { ConnectionRegistry } from "../registry";
 
-export const googlePlugin: ConnectionPlugin = ConnectionRegistry.register({
+export const googlePlugin = ConnectionRegistry.register({
   slug: "google",
+  order: 10,
   title: "Google Calendar",
   description: "Auto-create calendar events from conversations",
-  isConnected: (s) => s.google,
-  isConfigured: (s) => s.googleConfigured,
   notices: {
     connected: { success: "Google Calendar connected successfully." },
     error: {

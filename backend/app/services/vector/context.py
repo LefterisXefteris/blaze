@@ -1,7 +1,8 @@
-import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -13,10 +14,6 @@ from app.models import (
 from app.services.vector.entities import detect_entity_matches, find_priority_by_title_keywords
 from app.services.vector.search import format_context_for_prompt, search_context
 from app.types import ContextHit, SessionRelatedContext
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 def _dedupe_hits(hits: list[ContextHit]) -> list[ContextHit]:
@@ -144,7 +141,7 @@ async def persist_related_context(
             else:
                 db.add(
                     ContextLink(
-                        id=new_id(),
+                        id=generate_id(),
                         userId=session.userId,
                         fromType="MEETING",
                         fromId=session_id,
@@ -179,7 +176,7 @@ async def link_priority_to_session(
         else:
             db.add(
                 ContextLink(
-                    id=new_id(),
+                    id=generate_id(),
                     userId=user_id,
                     fromType="MEETING",
                     fromId=session_id,

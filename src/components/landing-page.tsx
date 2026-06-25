@@ -63,9 +63,9 @@ const features = [
     ),
   },
   {
-    title: "GitHub inbox triage",
+    title: "GitHub-aware notes",
     description:
-      "PRs and issues surface with AI-ranked priority — review what matters, ignore the noise.",
+      "Paste a transcript and Blaze links related PRs and issues — then suggests follow-ups.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden>
         <path
@@ -79,9 +79,9 @@ const features = [
     ),
   },
   {
-    title: "Semantic search",
+    title: "Focused notepad",
     description:
-      "Find decisions, owners, and action items across every captured conversation — instantly.",
+      "A clean writing surface for transcripts and scratch notes — summaries and actions when you need them.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" aria-hidden>
         <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5" />

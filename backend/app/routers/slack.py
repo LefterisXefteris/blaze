@@ -23,13 +23,8 @@ from app.services.integrations.slack_meetings import (
     start_slack_meeting_session,
 )
 from app.utils import app_origin, serialize_model
-import secrets
 
 router = APIRouter(prefix="/api/slack", tags=["slack"])
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 @router.get("/channels")

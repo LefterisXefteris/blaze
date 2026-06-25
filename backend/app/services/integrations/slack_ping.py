@@ -20,7 +20,7 @@ from app.services.integrations.slack import get_slack_client
 from app.services.integrations.slack_approvals import APPROVAL_COMMAND
 from app.services.integrations.slack_meetings import start_slack_meeting_session
 from app.config import get_settings
-from app.services.integrations.slack_voice import voice_listen_hint
+from app.services.integrations.slack_common import voice_listen_hint
 from app.utils import app_origin
 
 # channel_id -> last response unix time

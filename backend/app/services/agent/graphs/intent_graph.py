@@ -6,6 +6,7 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.ids import generate_id
 from app.database import AsyncSessionLocal
 from app.models import (
     AgentAction,
@@ -23,12 +24,6 @@ from app.types import Intent, SessionMessage, intent_type_to_enum
 
 def _intent_fingerprint(intent: Intent) -> str:
     return f"{intent.type}:{intent.title.lower().strip()}"
-
-
-def _new_id() -> str:
-    import secrets
-
-    return secrets.token_hex(12)
 
 
 async def _load_session(state: IntentGraphState) -> dict[str, Any]:
@@ -111,14 +106,21 @@ async def _dispatch_actions(state: IntentGraphState) -> dict[str, Any]:
         risk = classify_risk(intent.model_dump())
         risk_level = RiskLevel.LOW if risk == "low" else RiskLevel.HIGH
 
+        from app.services.llm.observability import current_trace_id
+
+        payload = intent.model_dump()
+        trace_id = current_trace_id()
+        if trace_id:
+            payload["langfuseTraceId"] = trace_id
+
         async with AsyncSessionLocal() as db:
             action = AgentAction(
-                id=_new_id(),
+                id=generate_id(),
                 sessionId=session_id,
                 intentType=IntentType(intent_type_to_enum(intent.type)),
                 riskLevel=risk_level,
                 confidence=intent.confidence,
-                payload=intent.model_dump(),
+                payload=payload,
                 sourceMessageIds=intent.sourceMessageIds,
                 status=AgentActionStatus.PENDING,
             )
@@ -189,6 +191,25 @@ def get_intent_graph():
 
 
 async def run_intent_graph(session_id: str) -> list[dict[str, Any]]:
+    from app.services.llm.observability import (
+        langfuse_enabled,
+        load_session_trace_context,
+        trace_graph_run,
+    )
+
     graph = get_intent_graph()
-    result = await graph.ainvoke({"session_id": session_id})
+    trace_ctx = await load_session_trace_context(session_id)
+
+    if langfuse_enabled():
+        with trace_graph_run(
+            graph_name="intent_graph",
+            session_id=trace_ctx["session_id"] or session_id,
+            user_id=trace_ctx.get("user_id"),
+            source_type=trace_ctx.get("source_type"),
+            session_title=trace_ctx.get("session_title"),
+        ) as config:
+            result = await graph.ainvoke({"session_id": session_id}, config=config)
+    else:
+        result = await graph.ainvoke({"session_id": session_id})
+
     return result.get("results") or []

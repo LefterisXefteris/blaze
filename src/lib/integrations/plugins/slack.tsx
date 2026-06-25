@@ -1,13 +1,12 @@
-import type { ConnectionPlugin } from "../types";
 import { ConnectionRegistry } from "../registry";
+import { pluginMetadata } from "../status";
 
-export const slackPlugin: ConnectionPlugin = ConnectionRegistry.register({
+export const slackPlugin = ConnectionRegistry.register({
   slug: "slack",
+  order: 20,
   title: "Slack",
   description: "Capture Slack meetings & huddles — live notes like Granola",
-  subtitle: (s) => (s.slackSettings?.teamName as string | undefined) ?? null,
-  isConnected: (s) => s.slack,
-  isConfigured: (s) => s.slackConfigured,
+  subtitle: (s) => (pluginMetadata(s, "slack").teamName as string | undefined) ?? null,
   notices: {
     connected: { success: "Slack connected successfully." },
     error: {
@@ -79,7 +78,7 @@ SLACK_SIGNING_SECRET="..."`}</pre>
     );
   },
   renderConnected({ status, updateSettings }) {
-    const slack = status.slackSettings ?? {};
+    const slack = pluginMetadata(status, "slack");
     const slackEventsUrl = `${status.appUrl}/api/slack/events`;
     const slackInteractionsUrl = `${status.appUrl}/api/slack/interactions`;
 

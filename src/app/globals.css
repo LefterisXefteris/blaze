@@ -1312,6 +1312,55 @@ a.text-link:hover {
   color: var(--blaze-orange);
 }
 
+.notes-toolbar-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.notes-sidebar-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  border-radius: 0.5rem;
+}
+
+.notes-sidebar-row:hover .notes-sidebar-delete,
+.notes-sidebar-row:focus-within .notes-sidebar-delete {
+  opacity: 1;
+}
+
+.notes-sidebar-row .notes-sidebar-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes-sidebar-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  margin-top: 0.2rem;
+  margin-right: 0.15rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.notes-sidebar-delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.notes-sidebar-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .notes-toolbar-badge {
   font-size: 0.65rem;
   padding: 0.05rem 0.35rem;
@@ -1427,6 +1476,7 @@ a.text-link:hover {
   flex: 1;
   overflow-y: auto;
   padding: 0.35rem 0.5rem 0.75rem;
+  contain: layout style paint;
 }
 
 .notes-sidebar-group {
@@ -1527,6 +1577,10 @@ a.text-link:hover {
 .notes-sidebar-item-source {
   color: var(--muted);
   gap: 0.3rem;
+}
+
+.notes-sidebar-meta-sep {
+  color: rgba(133, 133, 133, 0.45);
 }
 
 .notes-sidebar-stat {
@@ -1737,6 +1791,243 @@ a.text-link:hover {
   outline: none;
 }
 
+.notes-title-display {
+  display: block;
+  width: 100%;
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+  margin-bottom: 0.35rem;
+}
+
+.notes-date {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.notes-article {
+  max-width: none;
+}
+
+.notes-section {
+  margin-bottom: 2rem;
+}
+
+.notes-section:last-child {
+  margin-bottom: 0;
+}
+
+.notes-section-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+.notes-section-body {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+
+.notes-section-list {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.25rem;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.notes-section-list li + li {
+  margin-top: 0.35rem;
+}
+
+.notes-section-footnote {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.75rem;
+  line-height: 1.5;
+}
+
+.notes-transcript {
+  margin-top: 0.25rem;
+}
+
+.notes-transcript-row {
+  padding: 0.75rem 1rem;
+}
+
+.notes-transcript-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.notes-transcript-speaker {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.notes-transcript-time {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.notes-transcript-content {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-top: 0.125rem;
+  line-height: 1.5;
+}
+
+.notes-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.notes-quote {
+  border-left: 2px solid var(--border);
+  padding-left: 1rem;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.notes-quote-attribution {
+  font-size: 0.875rem;
+  font-style: normal;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+
+.notes-source-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.notes-source-badge .notes-date {
+  margin-bottom: 0;
+}
+
+.notes-source-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.notes-source-badge-sep {
+  opacity: 0.45;
+}
+
+.notes-source-badge-ref {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.notes-agent-hero {
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.notes-source-panel-scroll {
+  overflow-y: auto;
+}
+
+.notes-source-github-card {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notes-source-live-summary {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notes-section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.notes-section-heading-row .notes-section-title {
+  margin-bottom: 0;
+}
+
+.notes-section-action {
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.notes-section-action:hover {
+  color: var(--foreground);
+}
+
+.notes-scratch-textarea {
+  display: block;
+  width: 100%;
+  min-height: 8rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  outline: none;
+  resize: vertical;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.notes-scratch-textarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.notes-scratch-textarea::placeholder {
+  color: rgba(133, 133, 133, 0.45);
+}
+
+.notes-inline-input {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  outline: none;
+  padding: 0.5rem 0.75rem;
+}
+
+.notes-inline-input:focus {
+  border-color: var(--border);
+}
+
 /* Context aside */
 .notes-aside-inner {
   position: sticky;
@@ -1744,6 +2035,7 @@ a.text-link:hover {
   padding: 0.25rem 0;
   max-height: calc(100vh - 8rem);
   overflow-y: auto;
+  contain: layout style paint;
 }
 
 .notes-context-header {

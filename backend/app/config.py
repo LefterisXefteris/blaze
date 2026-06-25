@@ -60,6 +60,12 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     elevenlabs_api_key: str | None = None
+
+    langfuse_enabled: bool = False
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_host: str = "http://localhost:3100"
+    langfuse_live_notes_sample_rate: float = 0.2
     dev_demo_login: bool = False
     blaze_handoff_dir: str | None = None
     blaze_cursor_handoff: str = "auto"
@@ -84,7 +90,7 @@ def get_settings() -> Settings:
     if not jwt_secret:
         raise RuntimeError("BLAZE_JWT_SECRET is required in .env")
 
-    return Settings(
+    settings = Settings(
         database_url=os.environ["DATABASE_URL"],
         jwt_secret=jwt_secret,
         app_url=os.environ.get("NEXT_PUBLIC_APP_URL", os.environ.get("AUTH_URL", "http://localhost:3010")),
@@ -105,9 +111,31 @@ def get_settings() -> Settings:
         slack_signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
         openai_api_key=os.environ.get("OPENAI_API_KEY"),
         elevenlabs_api_key=os.environ.get("ELEVENLABS_API_KEY"),
+        langfuse_enabled=os.environ.get("LANGFUSE_ENABLED", "").lower() == "true",
+        langfuse_public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
+        langfuse_secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
+        langfuse_host=os.environ.get("LANGFUSE_HOST", "http://localhost:3100"),
+        langfuse_live_notes_sample_rate=float(
+            os.environ.get("LANGFUSE_LIVE_NOTES_SAMPLE_RATE", "0.2")
+        ),
         dev_demo_login=os.environ.get("DEV_DEMO_LOGIN", "").lower() == "true",
         blaze_handoff_dir=os.environ.get("BLAZE_HANDOFF_DIR"),
         blaze_cursor_handoff=os.environ.get("BLAZE_CURSOR_HANDOFF", "auto"),
         blaze_cursor_rules=os.environ.get("BLAZE_CURSOR_RULES", "true").lower()
         != "false",
     )
+
+    _apply_langfuse_env(settings)
+    return settings
+
+
+def _apply_langfuse_env(settings: Settings) -> None:
+    """Point the Langfuse SDK at the local self-hosted instance (never Cloud by default)."""
+    import os
+
+    if settings.langfuse_public_key:
+        os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
+    if settings.langfuse_secret_key:
+        os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
+    if settings.langfuse_host:
+        os.environ.setdefault("LANGFUSE_HOST", settings.langfuse_host.rstrip("/"))

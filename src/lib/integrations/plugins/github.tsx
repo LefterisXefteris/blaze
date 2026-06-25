@@ -1,13 +1,17 @@
-import type { ConnectionPlugin } from "../types";
 import { ConnectionRegistry } from "../registry";
+import { pluginMetadata } from "../status";
 
-export const githubPlugin: ConnectionPlugin = ConnectionRegistry.register({
+export const githubPlugin = ConnectionRegistry.register({
   slug: "github",
+  order: 30,
   title: "GitHub",
-  description: "Inbox for assignments, @mentions, and review requests",
-  subtitle: (s) => (s.githubLogin ? `@${s.githubLogin}` : null),
-  isConnected: (s) => s.github,
-  isConfigured: (s) => s.githubConfigured,
+  description: "Assignments, @mentions, and review requests from GitHub",
+  subtitle: (s) => {
+    const login = (pluginMetadata(s, "github").githubLogin ?? s.githubLogin) as
+      | string
+      | undefined;
+    return login ? `@${login}` : null;
+  },
   notices: {
     connected: { success: "GitHub connected successfully." },
     error: {
@@ -59,7 +63,7 @@ GITHUB_CLIENT_SECRET="your-client-secret"`}</pre>
     );
   },
   renderConnected({ status, updateSettings }) {
-    const gh = status.githubSettings ?? {};
+    const gh = pluginMetadata(status, "github");
 
     return (
       <div className="space-y-2">
@@ -104,8 +108,8 @@ GITHUB_CLIENT_SECRET="your-client-secret"`}</pre>
           </code>
         </p>
         <p className="text-xs text-muted">
-          Local dev: GitHub cannot reach localhost — use <strong>Inbox → Sync mentions</strong>{" "}
-          instead, or expose the app with ngrok and add the webhook above.
+          Local dev: GitHub cannot reach localhost — expose the app with ngrok and add the
+          webhook above.
         </p>
       </div>
     );

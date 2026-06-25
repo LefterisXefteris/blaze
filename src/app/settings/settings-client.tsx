@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { ConnectionCard, ConnectionNoticeBanner } from "@/components/connection-card";
 import {
   ConnectionRegistry,
+  EMPTY_INTEGRATION_STATUS,
   type ConnectionNotice,
   type IntegrationStatusResponse,
-  type PluginSlug,
 } from "@/lib/integrations";
 
 type RepoMapping = { repo: string; path: string };
@@ -124,19 +124,6 @@ function RepoWorkspaceSettings() {
   );
 }
 
-const EMPTY_STATUS: IntegrationStatusResponse = {
-  google: false,
-  googleConfigured: false,
-  slack: false,
-  slackConfigured: false,
-  appUrl: "http://localhost:3010",
-  github: false,
-  githubConfigured: false,
-  githubLogin: null,
-  githubSettings: null,
-  slackSettings: null,
-};
-
 function parseNotice(value: string | null): ConnectionNotice {
   if (value === "connected" || value === "error" || value === "not_configured") {
     return value;
@@ -145,8 +132,8 @@ function parseNotice(value: string | null): ConnectionNotice {
 }
 
 export default function SettingsPage() {
-  const [status, setStatus] = useState<IntegrationStatusResponse>(EMPTY_STATUS);
-  const [notices, setNotices] = useState<Partial<Record<PluginSlug, ConnectionNotice>>>({});
+  const [status, setStatus] = useState<IntegrationStatusResponse>(EMPTY_INTEGRATION_STATUS);
+  const [notices, setNotices] = useState<Record<string, ConnectionNotice>>({});
 
   const load = () => {
     fetch("/api/integrations/status")
@@ -156,7 +143,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const next: Partial<Record<PluginSlug, ConnectionNotice>> = {};
+    const next: Record<string, ConnectionNotice> = {};
     for (const plugin of ConnectionRegistry.all()) {
       next[plugin.slug] = parseNotice(params.get(plugin.slug));
     }
@@ -167,7 +154,7 @@ export default function SettingsPage() {
     load();
   }, []);
 
-  const updatePluginSettings = async (slug: PluginSlug, settings: Record<string, unknown>) => {
+  const updatePluginSettings = async (slug: string, settings: Record<string, unknown>) => {
     await fetch(`/api/integrations/${slug}/settings`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

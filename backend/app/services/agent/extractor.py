@@ -2,15 +2,10 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 
-from openai import AsyncOpenAI
-
-from app.config import get_settings
+from app.services.llm.client import get_openai_client
+from app.services.llm.observability import record_llm_fallback
+from app.services.llm.prompts import get_intent_extraction_prompt, get_live_summary_prompt
 from app.types import ExtractionResult, Intent, SessionMessage
-
-settings = get_settings()
-_openai: AsyncOpenAI | None = (
-    AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-)
 
 DAY_NAMES = [
     "sunday",
@@ -210,7 +205,13 @@ async def generate_live_summary(
     source_label = "Slack meeting/huddle" if source_type == "SLACK" else "Meeting"
     title = session_meta.get("title")
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
+        record_llm_fallback(
+            operation="generate_live_summary",
+            reason="openai_not_configured",
+            metadata={"session_title": title, "source_type": source_type},
+        )
         return rule_based_live_summary(window, user_notes, title)
 
     transcript = "\n".join(f"{m.speaker}: {m.content}" for m in window)
@@ -222,30 +223,16 @@ async def generate_live_summary(
             + related_context.strip()
         )
 
-    related_ctx_line = ""
-    if related_context and related_context.strip():
-        related_ctx_line = (
-            "- **Related PR/issue context** (brief, if workspace context is relevant to this meeting)"
-        )
+    system_prompt = get_live_summary_prompt(
+        source_label=source_label,
+        related_context_present=bool(related_context and related_context.strip()),
+    )
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": f"""You write live meeting notes like Granola — concise, scannable markdown.
-Format:
-- One-line meeting context
-- **Key points** (3-6 bullets, only what's substantively discussed)
-- **Decisions** (if any, else omit section)
-- **Action items** (if any, with owner when clear)
-- **Open questions** (if any)
-{related_ctx_line}
-
-Keep it short. Update-style notes for someone glancing during a live {source_label}.
-Do not invent facts. Use only the transcript and provided workspace context.""",
-                },
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": (
@@ -258,8 +245,24 @@ Do not invent facts. Use only the transcript and provided workspace context.""",
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        return content.strip() if content else rule_based_live_summary(window, user_notes, title)
-    except Exception:
+        if not content:
+            record_llm_fallback(
+                operation="generate_live_summary",
+                reason="empty_model_response",
+                metadata={"session_title": title, "source_type": source_type},
+            )
+            return rule_based_live_summary(window, user_notes, title)
+        return content.strip()
+    except Exception as error:
+        record_llm_fallback(
+            operation="generate_live_summary",
+            reason="llm_error",
+            metadata={
+                "session_title": title,
+                "source_type": source_type,
+                "error": str(error),
+            },
+        )
         return rule_based_live_summary(window, user_notes, title)
 
 
@@ -273,41 +276,51 @@ async def extract_intents(
     reference = datetime.now(timezone.utc)
     window = messages[-20:]
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
+        record_llm_fallback(
+            operation="extract_intents",
+            reason="openai_not_configured",
+            metadata={"session_title": session_meta.get("title")},
+        )
         return rule_based_extract(window, reference)
 
     transcript = "\n".join(f"[{m.id}] {m.speaker}: {m.content}" for m in window)
+    system_prompt = get_intent_extraction_prompt(
+        session_title=session_meta.get("title"),
+        reference=reference,
+    )
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You extract actionable intents from conversation transcripts.\n"
-                        "Return JSON: { \"intents\": [...] }\n"
-                        "Each intent: type (calendar_event|todo|follow_up_email|ticket|crm_update), "
-                        "confidence (0-1), title, optional description/start/end/dueDate/attendees/assignee, "
-                        "sourceMessageIds (array of message ids from transcript), "
-                        "risk (low for calendar_event and todo, high for others).\n"
-                        f"Session: {session_meta.get('title') or 'Untitled'}. "
-                        f"Today: {reference.isoformat()}.\n"
-                        "Only extract clear, actionable intents. Never auto high-risk without explicit request."
-                    ),
-                },
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": transcript},
             ],
             temperature=0.2,
         )
         content = response.choices[0].message.content
         if not content:
+            record_llm_fallback(
+                operation="extract_intents",
+                reason="empty_model_response",
+                metadata={"session_title": session_meta.get("title")},
+            )
             return rule_based_extract(window, reference)
 
         parsed = ExtractionResult.model_validate(json.loads(content))
         return parsed
-    except Exception:
+    except Exception as error:
+        record_llm_fallback(
+            operation="extract_intents",
+            reason="llm_error",
+            metadata={
+                "session_title": session_meta.get("title"),
+                "error": str(error),
+            },
+        )
         return rule_based_extract(window, reference)
 
 
@@ -337,13 +350,14 @@ async def generate_note(
         },
     }
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return fallback
 
     transcript = "\n".join(f"{m.speaker}: {m.content}" for m in messages)
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -368,6 +382,7 @@ async def generate_note(
         )
         content = response.choices[0].message.content
         if not content:
+            record_llm_fallback(operation="generate_note", reason="empty_model_response")
             return fallback
 
         parsed = json.loads(content)
@@ -375,7 +390,12 @@ async def generate_note(
             "aiSummary": parsed.get("summary") or "Session summary",
             "structured": parsed,
         }
-    except Exception:
+    except Exception as error:
+        record_llm_fallback(
+            operation="generate_note",
+            reason="llm_error",
+            metadata={"error": str(error)},
+        )
         return fallback
 
 
@@ -386,13 +406,14 @@ async def run_recipe(
 ) -> str:
     transcript = "\n".join(f"{m.speaker}: {m.content}" for m in messages)
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return (
             f"[Recipe output — set OPENAI_API_KEY for AI generation]\n\n"
             f"Prompt: {prompt}\n\nContext: {transcript[:500]}..."
         )
 
-    response = await _openai.chat.completions.create(
+    response = await openai.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": prompt},

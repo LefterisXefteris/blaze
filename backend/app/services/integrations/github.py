@@ -1,18 +1,15 @@
-import secrets
 from typing import Any
 
 import httpx
 from sqlalchemy import select
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import Integration, IntegrationProvider
 
 
 GITHUB_API = "https://api.github.com"
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def get_github_token(user_id: str) -> str | None:
@@ -74,7 +71,7 @@ async def save_github_integration(
         else:
             db.add(
                 Integration(
-                    id=new_id(),
+                    id=generate_id(),
                     userId=user_id,
                     provider=IntegrationProvider.GITHUB,
                     accessToken=access_token,

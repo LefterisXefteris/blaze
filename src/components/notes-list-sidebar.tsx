@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, memo } from "react";
 import Link from "next/link";
 import {
   format,
@@ -9,6 +9,8 @@ import {
   startOfDay,
   subDays,
 } from "date-fns";
+import { readJsonResponse } from "@/lib/api";
+import { NoteDeleteButton } from "@/components/note-delete-button";
 
 export type NoteListItem = {
   id: string;
@@ -29,6 +31,7 @@ type NotesListSidebarProps = {
   activeSessionId: string | null;
   onSelectNote: (item: NoteListItem) => void;
   onNewNote: () => void;
+  onNoteDeleted?: (sessionId: string) => void;
   refreshKey?: number;
 };
 
@@ -181,33 +184,42 @@ function StatusIcon({ item }: { item: NoteListItem }) {
   );
 }
 
-function NoteListRow({
+function NoteListRowInner({
   item,
   isActive,
   onSelect,
+  onDeleted,
 }: {
   item: NoteListItem;
   isActive: boolean;
   onSelect: (item: NoteListItem) => void;
+  onDeleted: (sessionId: string) => void;
 }) {
   const title = item.title?.trim() || "Untitled";
-  const hasStats =
-    item.autoActions > 0 ||
-    item.pendingActions > 0 ||
-    item.githubLinks > 0 ||
-    item.messageCount > 0;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(item)}
-      className={`notes-sidebar-item ${isActive ? "notes-sidebar-item-active" : ""}`}
-    >
-      <StatusIcon item={item} />
-      <span className="notes-sidebar-item-body">
-        <span className="notes-sidebar-item-title">{title}</span>
-        {hasStats ? (
+    <div className={`notes-sidebar-row ${isActive ? "notes-sidebar-row-active" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        className={`notes-sidebar-item ${isActive ? "notes-sidebar-item-active" : ""}`}
+      >
+        <StatusIcon item={item} />
+        <span className="notes-sidebar-item-body">
+          <span className="notes-sidebar-item-title">{title}</span>
           <span className="notes-sidebar-item-meta">
+            <span className="notes-sidebar-item-source">
+              <SourceIcon sourceType={item.sourceType} />
+              <span>{sourceLabel(item.sourceType)}</span>
+            </span>
+            {(item.autoActions > 0 ||
+              item.pendingActions > 0 ||
+              item.githubLinks > 0 ||
+              item.messageCount > 0) && (
+              <span className="notes-sidebar-meta-sep" aria-hidden>
+                ·
+              </span>
+            )}
             {item.autoActions > 0 && (
               <span className="notes-sidebar-stat notes-sidebar-stat-auto">
                 +{item.autoActions}
@@ -218,33 +230,38 @@ function NoteListRow({
                 {item.pendingActions} pending
               </span>
             )}
-            {item.githubLinks > 0 && (
+            {item.githubLinks > 0 && item.sourceType !== "GITHUB" && (
               <span className="notes-sidebar-stat notes-sidebar-stat-github">
                 <GitHubIcon className="w-3 h-3" />
                 {item.githubLinks}
               </span>
             )}
-            {item.messageCount > 0 && item.sourceType !== "MANUAL" && (
+            {item.messageCount > 0 && (
               <span className="notes-sidebar-stat notes-sidebar-stat-muted">
                 {item.messageCount} msgs
               </span>
             )}
           </span>
-        ) : (
-          <span className="notes-sidebar-item-meta notes-sidebar-item-source">
-            <SourceIcon sourceType={item.sourceType} />
-            <span>{sourceLabel(item.sourceType)}</span>
-          </span>
-        )}
-      </span>
-    </button>
+        </span>
+      </button>
+      <NoteDeleteButton
+        sessionId={item.id}
+        title={item.title}
+        variant="sidebar"
+        redirectTo={null}
+        onDeleted={() => onDeleted(item.id)}
+      />
+    </div>
   );
 }
+
+const NoteListRow = memo(NoteListRowInner);
 
 export function NotesListSidebar({
   activeSessionId,
   onSelectNote,
   onNewNote,
+  onNoteDeleted,
   refreshKey = 0,
 }: NotesListSidebarProps) {
   const [items, setItems] = useState<NoteListItem[]>([]);
@@ -269,11 +286,16 @@ export function NotesListSidebar({
         return;
       }
       if (!res.ok) {
-        setLoadError("Could not load notes — start the API with npm run dev:all.");
+        setLoadError("Could not load notes — start the API with ./run.sh.");
         if (!append) setItems([]);
         return;
       }
-      const data = await res.json();
+      const data = await readJsonResponse<{ items?: NoteListItem[]; hasMore?: boolean }>(res);
+      if (!data) {
+        setLoadError("Could not load notes — API returned an invalid response.");
+        if (!append) setItems([]);
+        return;
+      }
       setLoadError(null);
       setItems((prev) =>
         append ? [...prev, ...(data.items ?? [])] : (data.items ?? [])
@@ -289,6 +311,14 @@ export function NotesListSidebar({
   useEffect(() => {
     void load(0, false);
   }, [load, refreshKey]);
+
+  const handleNoteDeleted = useCallback(
+    (sessionId: string) => {
+      setItems((prev) => prev.filter((item) => item.id !== sessionId));
+      onNoteDeleted?.(sessionId);
+    },
+    [onNoteDeleted]
+  );
 
   const groups = useMemo(() => groupNotesByDate(items), [items]);
 
@@ -339,6 +369,7 @@ export function NotesListSidebar({
                       item={item}
                       isActive={item.id === activeSessionId}
                       onSelect={onSelectNote}
+                      onDeleted={handleNoteDeleted}
                     />
                   </li>
                 ))}

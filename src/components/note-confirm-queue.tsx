@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionCard } from "@/components/action-card";
 
 type ActionPayload = {
@@ -52,16 +52,26 @@ export function NoteConfirmQueue({
 }: NoteConfirmQueueProps) {
   const [actions, setActions] = useState<NoteAction[]>([]);
   const [loading, setLoading] = useState(true);
+  const onPendingChangeRef = useRef(onPendingChange);
+  const lastPendingCountRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    onPendingChangeRef.current = onPendingChange;
+  }, [onPendingChange]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/notes/actions?session_id=${sessionId}`);
     if (res.ok) {
       const data: NoteAction[] = await res.json();
       setActions(data);
-      onPendingChange?.(data.filter((a) => a.status === "PENDING").length);
+      const pendingCount = data.filter((a) => a.status === "PENDING").length;
+      if (lastPendingCountRef.current !== pendingCount) {
+        lastPendingCountRef.current = pendingCount;
+        onPendingChangeRef.current?.(pendingCount);
+      }
     }
     setLoading(false);
-  }, [sessionId, onPendingChange]);
+  }, [sessionId]);
 
   useEffect(() => {
     setLoading(true);
@@ -101,11 +111,13 @@ export function NoteConfirmQueue({
   if (variant === "page" && !showPageBlock) return null;
 
   const titleClass =
-    variant === "sidebar" ? "notes-context-section-title" : "text-lg font-medium";
+    variant === "sidebar"
+      ? "notes-context-section-title"
+      : "notes-section-title";
   const sectionClass =
     variant === "sidebar"
       ? "notes-agent-section notes-context-section"
-      : "mb-8";
+      : "notes-section";
 
   return (
     <section className={sectionClass}>
@@ -113,7 +125,7 @@ export function NoteConfirmQueue({
         <div>
           <h2 className={titleClass}>Confirm queue</h2>
           {variant === "page" && (
-            <p className="text-sm text-muted mt-1">
+            <p className="notes-section-body text-muted mt-1">
               Actions inferred from your note — approve before Blaze executes them
             </p>
           )}
