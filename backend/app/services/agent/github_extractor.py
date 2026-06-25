@@ -1,15 +1,8 @@
 import json
 import re
 
-from openai import AsyncOpenAI
-
-from app.config import get_settings
+from app.services.llm.client import get_openai_client
 from app.types import ExtractionResult, Intent, SessionMessage
-
-settings = get_settings()
-_openai: AsyncOpenAI | None = (
-    AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-)
 
 
 async def summarize_github_thread(
@@ -22,7 +15,8 @@ async def summarize_github_thread(
     urgent_pattern = re.compile(r"urgent|production|blocked|critical|asap|p0|sev-?1", re.I)
     is_urgent = bool(urgent_pattern.search(title) or urgent_pattern.search(transcript))
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return {
             "summary": (
                 f"{reason.replace('_', ' ')} on {repo}: {title}. "
@@ -32,7 +26,7 @@ async def summarize_github_thread(
         }
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -104,13 +98,14 @@ async def extract_github_mention_plan(
     title: str,
     messages: list[SessionMessage],
 ) -> dict:
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return _default_mention_plan(repo, issue_number, title, messages)
 
     transcript = "\n".join(f"[{m.id}] {m.speaker}: {m.content}" for m in messages)
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -186,13 +181,14 @@ async def extract_github_intents(
         ]
     )
 
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return fallback
 
     transcript = "\n".join(f"[{m.id}] {m.speaker}: {m.content}" for m in messages)
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[

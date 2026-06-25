@@ -49,6 +49,9 @@ backend/**/__pycache__/
 
 # local coding-agent handoffs
 .blaze/handoffs/
+.blaze/ngrok.pid
+.blaze/ngrok.url
+.blaze/ngrok.log
 .cursor/rules/blaze-handoff.mdc
 
 # desktop app

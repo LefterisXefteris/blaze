@@ -22,7 +22,12 @@ from app.models import (
 from app.config import get_settings
 from app.services.agent.action_executor import confirm_action, reject_action
 from app.services.integrations.slack import get_slack_client
-from app.services.integrations.slack_voice import voice_listen_hint
+from app.services.integrations.slack_common import (
+    slack_meta as _slack_meta,
+    truncate as _truncate,
+    user_allows_slack_live_notes as _user_allows_slack_live_notes,
+    voice_listen_hint,
+)
 from app.utils import app_origin
 
 APPROVE_PREFIX = "blaze_approve"
@@ -42,13 +47,6 @@ def _session_url(session_id: str) -> str:
     return f"{app_origin()}/sessions/{session_id}"
 
 
-def _truncate(text: str, limit: int = 280) -> str:
-    text = (text or "").strip()
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1] + "…"
-
-
 def _action_title(action: AgentAction) -> str:
     payload = action.payload or {}
     return payload.get("title") or action.intentType.value.replace("_", " ").title()
@@ -62,12 +60,6 @@ def _action_description(action: AgentAction) -> str:
         or payload.get("summary")
         or ""
     )
-
-
-def _slack_meta(session: CaptureSession) -> dict[str, Any]:
-    meta = session.metadata_ or {}
-    slack = meta.get("slack")
-    return slack if isinstance(slack, dict) else {}
 
 
 async def _merge_session_slack_meta(session_id: str, updates: dict[str, Any]) -> None:
@@ -84,6 +76,21 @@ async def _merge_session_slack_meta(session_id: str, updates: dict[str, Any]) ->
         meta["slack"] = slack
         session.metadata_ = meta
         await db.commit()
+
+
+async def _user_allows_slack_approvals(user_id: str) -> bool:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Integration).where(
+                Integration.userId == user_id,
+                Integration.provider == IntegrationProvider.SLACK,
+            )
+        )
+        integration = result.scalar_one_or_none()
+    if not integration:
+        return False
+    meta = integration.metadata_ or {}
+    return meta.get("slackApprovals", True) is not False
 
 
 def _approval_blocks(
@@ -200,36 +207,6 @@ def _live_notes_blocks(session: CaptureSession, summary: str) -> list[dict[str, 
             ],
         },
     ]
-
-
-async def _user_allows_slack_approvals(user_id: str) -> bool:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Integration).where(
-                Integration.userId == user_id,
-                Integration.provider == IntegrationProvider.SLACK,
-            )
-        )
-        integration = result.scalar_one_or_none()
-    if not integration:
-        return False
-    meta = integration.metadata_ or {}
-    return meta.get("slackApprovals", True) is not False
-
-
-async def _user_allows_slack_live_notes(user_id: str) -> bool:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Integration).where(
-                Integration.userId == user_id,
-                Integration.provider == IntegrationProvider.SLACK,
-            )
-        )
-        integration = result.scalar_one_or_none()
-    if not integration:
-        return False
-    meta = integration.metadata_ or {}
-    return meta.get("slackLiveNotes", True) is not False
 
 
 async def _resolve_blaze_user_for_slack(slack_user_id: str, team_id: str | None) -> str | None:

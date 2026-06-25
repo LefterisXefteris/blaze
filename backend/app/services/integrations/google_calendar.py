@@ -1,4 +1,3 @@
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -7,12 +6,9 @@ from googleapiclient.discovery import build
 from sqlalchemy import select
 
 from app.config import get_settings
+from app.core.ids import generate_id
 from app.database import AsyncSessionLocal
 from app.models import Integration, IntegrationProvider
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def save_google_integration(
@@ -39,7 +35,7 @@ async def save_google_integration(
         else:
             db.add(
                 Integration(
-                    id=new_id(),
+                    id=generate_id(),
                     userId=user_id,
                     provider=IntegrationProvider.GOOGLE_CALENDAR,
                     accessToken=access_token,

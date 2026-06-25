@@ -25,6 +25,12 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # .env uses localhost for Next.js/Prisma on the host; inside Docker use service names.
+      DATABASE_URL: postgresql://lefteris:lefteris@postgres:5432/lefteris_os
+      DIRECT_URL: postgresql://lefteris:lefteris@postgres:5432/lefteris_os
+      REDIS_URL: redis://redis:6379
+      LANGFUSE_HOST: http://langfuse-web:3000
     depends_on:
       - postgres
       - redis
@@ -36,6 +42,11 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://lefteris:lefteris@postgres:5432/lefteris_os
+      DIRECT_URL: postgresql://lefteris:lefteris@postgres:5432/lefteris_os
+      REDIS_URL: redis://redis:6379
+      LANGFUSE_HOST: http://langfuse-web:3000
     depends_on:
       - redis
       - api

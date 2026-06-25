@@ -1,15 +1,11 @@
-import secrets
-
 from sqlalchemy import delete, select, text
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import ContextChunk, ContextSourceType
 from app.services.vector.embed import embed_text, vector_to_sql
 from app.types import IndexChunkInput
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def upsert_context_chunk(input: IndexChunkInput) -> str | None:
@@ -37,7 +33,7 @@ async def upsert_context_chunk(input: IndexChunkInput) -> str | None:
             chunk = existing
         else:
             chunk = ContextChunk(
-                id=new_id(),
+                id=generate_id(),
                 userId=input.userId,
                 sourceType=ContextSourceType(input.sourceType),
                 sourceId=input.sourceId,

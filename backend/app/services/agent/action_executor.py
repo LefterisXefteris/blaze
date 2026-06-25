@@ -1,9 +1,10 @@
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -26,10 +27,6 @@ from app.services.integrations.google_calendar import (
     delete_calendar_event,
 )
 from app.services.vector.indexer import index_meeting_session
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def process_session_intents(session_id: str) -> list[dict[str, Any]]:
@@ -207,7 +204,7 @@ async def confirm_action(
         async with AsyncSessionLocal() as db:
             db.add(
                 ActionRevision(
-                    id=new_id(),
+                    id=generate_id(),
                     actionId=action_id,
                     payload=updated_payload,
                 )
@@ -360,6 +357,8 @@ async def confirm_action(
 
 
 async def reject_action(action_id: str, user_id: str) -> dict[str, Any]:
+    action_snapshot: dict[str, str] | None = None
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(AgentAction)
@@ -371,8 +370,27 @@ async def reject_action(action_id: str, user_id: str) -> dict[str, Any]:
         if not action:
             return {"success": False, "message": "Not found"}
 
+        payload = action.payload or {}
+        action_snapshot = {
+            "trace_id": payload.get("langfuseTraceId"),
+            "session_id": action.sessionId,
+            "intent_type": action.intentType.value,
+            "title": str(payload.get("title") or action.intentType.value),
+        }
+
         action.status = AgentActionStatus.REJECTED
         await db.commit()
+
+    if action_snapshot:
+        from app.services.llm.observability import record_action_rejection_score
+
+        record_action_rejection_score(
+            trace_id=action_snapshot["trace_id"],
+            action_id=action_id,
+            session_id=action_snapshot["session_id"],
+            intent_type=action_snapshot["intent_type"],
+            title=action_snapshot["title"],
+        )
 
     try:
         from app.services.integrations.slack_approvals import refresh_slack_approval_message
@@ -466,7 +484,7 @@ async def end_session(session_id: str, user_id: str) -> dict[str, Any]:
         else:
             db.add(
                 Note(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=session_id,
                     aiSummary=note_data["aiSummary"],
                     structured=note_data["structured"],

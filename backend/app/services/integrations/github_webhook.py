@@ -1,16 +1,11 @@
 import hashlib
 import hmac
-import secrets
 
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models import WebhookDelivery
 from app.services.agent.github_processor import process_github_event
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 def verify_github_signature(payload: str, signature: str | None, secret: str) -> bool:

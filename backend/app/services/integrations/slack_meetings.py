@@ -1,7 +1,8 @@
-import secrets
 from typing import Any
 
 from sqlalchemy import select
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -15,10 +16,6 @@ from app.models import (
 from app.services.agent.action_executor import end_session
 from app.services.agent.live_notes import update_session_live_summary
 from app.services.integrations.slack import fetch_channel_history, get_slack_client
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def get_slack_channel_label(user_id: str, channel_id: str) -> str:
@@ -116,7 +113,7 @@ async def start_slack_meeting_session(
 
     async with AsyncSessionLocal() as db:
         capture_session = CaptureSession(
-            id=new_id(),
+            id=generate_id(),
             userId=user_id,
             title=session_title,
             sourceType=CaptureSourceType.SLACK,
@@ -130,7 +127,7 @@ async def start_slack_meeting_session(
         for msg in history:
             db.add(
                 Message(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=capture_session.id,
                     externalId=msg["externalId"],
                     speaker=msg["speaker"],

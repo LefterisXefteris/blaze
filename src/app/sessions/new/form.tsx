@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { pluginConnected } from "@/lib/integrations";
 
 type Mode = "slack" | "meeting" | "manual" | "github";
 
@@ -46,7 +47,7 @@ export function NewSessionForm({ initialMode }: { initialMode?: string }) {
   useEffect(() => {
     fetch("/api/integrations/status")
       .then((r) => r.json())
-      .then((data) => setSlackConnected(data.slack));
+      .then((data) => setSlackConnected(pluginConnected(data, "slack")));
   }, []);
 
   const createSession = async () => {

@@ -1,11 +1,12 @@
 import re
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -36,10 +37,6 @@ from app.services.integrations.github import (
     github_fetch,
 )
 from app.services.vector.indexer import index_github_session
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 def _get_repo_full_name(payload: dict[str, Any]) -> str:
@@ -118,7 +115,7 @@ async def _process_mention_actions(
 
         async with AsyncSessionLocal() as db:
             ack_action = AgentAction(
-                id=new_id(),
+                id=generate_id(),
                 sessionId=session_id,
                 intentType=IntentType.GITHUB_ACK_COMMENT,
                 riskLevel=RiskLevel.LOW,
@@ -148,7 +145,7 @@ async def _process_mention_actions(
         if not existing_next:
             db.add(
                 AgentAction(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=session_id,
                     intentType=IntentType.GITHUB_NEXT_STEPS,
                     riskLevel=RiskLevel.HIGH,
@@ -209,7 +206,7 @@ async def _process_legacy_github_intents(
 
             db.add(
                 AgentAction(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=session_id,
                     intentType=intent_type,
                     riskLevel=RiskLevel.LOW if intent.risk == "low" else RiskLevel.HIGH,
@@ -276,7 +273,7 @@ async def ingest_github_item(
 
         if not session:
             session = CaptureSession(
-                id=new_id(),
+                id=generate_id(),
                 userId=user_id,
                 title=f"{repo} #{number}: {issue['title']}",
                 sourceType=CaptureSourceType.GITHUB,
@@ -287,7 +284,7 @@ async def ingest_github_item(
 
             db.add(
                 Message(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=session.id,
                     externalId=f"issue-{number}",
                     speaker=(issue.get("user") or {}).get("login") or "Author",
@@ -299,7 +296,7 @@ async def ingest_github_item(
             for comment in comments:
                 db.add(
                     Message(
-                        id=new_id(),
+                        id=generate_id(),
                         sessionId=session.id,
                         externalId=f"comment-{comment['id']}",
                         speaker=(comment.get("user") or {}).get("login") or "Commenter",
@@ -356,7 +353,7 @@ async def ingest_github_item(
             priority_item.metadata_ = metadata
         else:
             priority_item = PriorityItem(
-                id=new_id(),
+                id=generate_id(),
                 userId=user_id,
                 source="github",
                 externalId=external_id,

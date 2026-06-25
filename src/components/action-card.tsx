@@ -119,7 +119,7 @@ export function ActionCard({
     ? payload.suggestedAction === "follow_up_comment"
       ? "Post follow-up & approve"
       : payload.suggestedAction === "mark_done"
-        ? "Mark done in inbox"
+        ? "Mark done"
         : payload.suggestedAction === "handoff_coding"
           ? "Hand off to coding agent"
           : "Hand off to coding agent"

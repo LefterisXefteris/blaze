@@ -1,0 +1,71 @@
+{
+  "name": "blaze-llm-golden",
+  "description": "Anonymized Blaze transcripts for intent extraction and live-summary evals.",
+  "items": [
+    {
+      "id": "intent-sync-tuesday",
+      "task": "intent_extraction",
+      "input": {
+        "session_title": "Auth refactor sync",
+        "transcript": "[m1] Alex: Can we sync on the auth refactor Tuesday at 3pm?\n[m2] Sam: Works for me, I'll send a calendar hold."
+      },
+      "expected_output": {
+        "intent_types": ["calendar_event"],
+        "min_intents": 1,
+        "must_include_titles": ["sync", "meeting", "calendar"]
+      }
+    },
+    {
+      "id": "intent-todo-send-recap",
+      "task": "intent_extraction",
+      "input": {
+        "session_title": "Customer onboarding review",
+        "transcript": "[m1] Priya: I'll send the onboarding recap to the customer by EOD.\n[m2] Jordan: Great, and let's file a ticket for the broken webhook."
+      },
+      "expected_output": {
+        "intent_types": ["todo", "ticket"],
+        "min_intents": 2
+      }
+    },
+    {
+      "id": "intent-no-hallucination",
+      "task": "intent_extraction",
+      "input": {
+        "session_title": "Casual check-in",
+        "transcript": "[m1] Lee: Weather's nice today.\n[m2] Morgan: Yeah, good walk this morning."
+      },
+      "expected_output": {
+        "intent_types": [],
+        "max_intents": 0
+      }
+    },
+    {
+      "id": "summary-decision-action",
+      "task": "live_summary",
+      "input": {
+        "session_title": "Release planning",
+        "source_type": "MEETING",
+        "user_notes": "ship Friday if tests pass",
+        "transcript": "Alex: We agreed to ship Friday if CI is green.\nSam: I'll own the flaky test fix.\nPriya: Open question on rollback plan."
+      },
+      "expected_output": {
+        "must_include": ["Friday", "flaky test", "rollback"],
+        "must_not_include": ["unrelated customer", "hiring plan"]
+      }
+    },
+    {
+      "id": "summary-slack-huddle",
+      "task": "live_summary",
+      "input": {
+        "session_title": "Slack huddle — API rate limits",
+        "source_type": "SLACK",
+        "user_notes": "",
+        "transcript": "Dev: We're hitting 429s on the public API.\nPM: Decision is to add backoff in the client SDK this week.\nDev: I'll draft the GitHub issue."
+      },
+      "expected_output": {
+        "must_include": ["429", "backoff", "SDK"],
+        "must_not_include": ["calendar invite"]
+      }
+    }
+  ]
+}

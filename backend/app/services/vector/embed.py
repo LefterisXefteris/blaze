@@ -1,30 +1,18 @@
-import secrets
-
-from openai import AsyncOpenAI
-
-from app.config import get_settings
+from app.services.llm.client import get_openai_client, openai_available
 from app.types import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
-
-settings = get_settings()
-_openai: AsyncOpenAI | None = (
-    AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-)
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 def embeddings_available() -> bool:
-    return _openai is not None
+    return openai_available()
 
 
 async def embed_text(text: str) -> list[float] | None:
-    if not _openai or not text.strip():
+    openai = get_openai_client()
+    if not openai or not text.strip():
         return None
 
     try:
-        response = await _openai.embeddings.create(
+        response = await openai.embeddings.create(
             model=EMBEDDING_MODEL,
             input=text[:8000],
             dimensions=EMBEDDING_DIMENSIONS,
@@ -36,7 +24,8 @@ async def embed_text(text: str) -> list[float] | None:
 
 
 async def embed_texts(texts: list[str]) -> list[list[float] | None]:
-    if not _openai or not texts:
+    openai = get_openai_client()
+    if not openai or not texts:
         return [None] * len(texts)
 
     inputs = [t[:8000] for t in texts if t.strip()]
@@ -44,7 +33,7 @@ async def embed_texts(texts: list[str]) -> list[list[float] | None]:
         return [None] * len(texts)
 
     try:
-        response = await _openai.embeddings.create(
+        response = await openai.embeddings.create(
             model=EMBEDDING_MODEL,
             input=inputs,
             dimensions=EMBEDDING_DIMENSIONS,

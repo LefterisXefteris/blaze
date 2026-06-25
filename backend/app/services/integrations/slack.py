@@ -1,12 +1,13 @@
 import hashlib
 import hmac
-import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
 
 from slack_sdk import WebClient
 from sqlalchemy import select
+
+from app.core.ids import generate_id
 
 from app.database import AsyncSessionLocal
 from app.models import (
@@ -18,10 +19,6 @@ from app.models import (
     Message,
 )
 from app.queue import enqueue_intent_extraction, schedule_live_notes_update
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 async def get_slack_client(user_id: str) -> WebClient | None:
@@ -103,7 +100,7 @@ async def save_slack_integration(
         else:
             db.add(
                 Integration(
-                    id=new_id(),
+                    id=generate_id(),
                     userId=user_id,
                     provider=IntegrationProvider.SLACK,
                     accessToken=access_token,
@@ -230,7 +227,7 @@ async def handle_slack_message(
 
             db.add(
                 Message(
-                    id=new_id(),
+                    id=generate_id(),
                     sessionId=session.id,
                     externalId=message["ts"],
                     speaker=speaker,

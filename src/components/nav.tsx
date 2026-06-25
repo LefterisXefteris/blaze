@@ -7,8 +7,6 @@ import { BlazeLogo } from "@/components/blaze-logo";
 const links = [
   { href: "/notes", label: "Notes" },
   { href: "/settings", label: "Connections" },
-  { href: "/inbox", label: "Inbox" },
-  { href: "/search", label: "Search" },
   { href: "/recipes", label: "Recipes" },
 ];
 

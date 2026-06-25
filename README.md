@@ -11,7 +11,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python%203.12-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Postgres + pgvector](https://img.shields.io/badge/Postgres-pgvector-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 
-[Quick start](#quick-start) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Setup](#full-setup) · [Architecture](#architecture)
+[Quick start](#quick-start) · [Start & stop](#start-and-stop) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Setup](#full-setup) · [Architecture](#architecture)
 
 </div>
 
@@ -81,6 +81,65 @@ npm run dev:all
 Open [http://localhost:3010](http://localhost:3010) and click **Enter demo**.
 
 Add an `OPENAI_API_KEY` when you want embeddings, semantic search, and AI notes. Slack, GitHub, Google, and ElevenLabs are all optional and stay off until you wire them up.
+
+For the full Docker stack (API, worker, Postgres, Redis, Langfuse, ngrok), see [Start and stop](#start-and-stop) below.
+
+## Start and stop
+
+`run.sh` is the easiest way to bring the whole backend up or tear it down. It wraps Docker Compose (including Langfuse) and starts ngrok so Slack webhooks can reach your local API.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/) running
+- `.env` configured (`cp .env.example .env` — see [Full setup](#full-setup))
+- `npm install` done (needed for the UI)
+
+### Start everything
+
+```bash
+./run.sh up
+```
+
+This builds and starts all Docker services, then starts ngrok on port 8000 (unless `SKIP_NGROK=1` or ngrok isn't installed). When it's ready you'll see:
+
+| Service | URL |
+|---------|-----|
+| Blaze API | http://localhost:8000 |
+| Langfuse (LLM observability) | http://localhost:3100 |
+| Next.js UI | http://localhost:3010 (start separately — see below) |
+
+Start the frontend in a **second terminal**:
+
+```bash
+./run.sh dev
+```
+
+Open [http://localhost:3010](http://localhost:3010).
+
+For Slack Event Subscriptions, point your app at the ngrok URL:
+
+```bash
+./run.sh url
+# → https://….ngrok-free.app
+# Slack events: https://….ngrok-free.app/api/slack/events
+```
+
+### Stop everything
+
+```bash
+./run.sh down
+```
+
+Stops ngrok and removes all Docker containers (API, worker, Postgres, Redis, Langfuse stack).
+
+### Other `run.sh` commands
+
+| Command | What it does |
+|---------|--------------|
+| `./run.sh ps` | Show running containers |
+| `./run.sh logs` | Tail Docker logs (`./run.sh logs -f api` to follow one service) |
+| `./run.sh url` | Print the ngrok public URL |
+| `./run.sh restart` | Restart containers and ngrok |
 
 ## Tech stack
 
@@ -216,9 +275,11 @@ blaze/
 ├── backend/             # fastapi api, agents, integrations
 ├── desktop/             # tauri desktop app (local cursor handoffs)
 ├── prisma/              # database schema + migrations
-├── docker-compose.yml   # postgres (pgvector), redis, api, worker
-├── .env.example         # environment template — copy to .env
-└── package.json         # root scripts (dev, db, worker, desktop)
+├── docker-compose.yml          # postgres (pgvector), redis, api, worker
+├── docker-compose.langfuse.yml # optional langfuse observability stack
+├── run.sh                      # start/stop full stack + ngrok
+├── .env.example                # environment template — copy to .env
+└── package.json                # root scripts (dev, db, worker, desktop)
 ```
 
 ## Architecture
@@ -298,6 +359,8 @@ See [desktop/README.md](desktop/README.md) for the details. On cloud deployments
 
 ## Docker
 
+**Recommended:** use `./run.sh up` and `./run.sh down` (see [Start and stop](#start-and-stop)). It starts `docker-compose.yml` and `docker-compose.langfuse.yml` together and handles ngrok.
+
 `docker-compose.yml` covers local development:
 
 | Service | Port | Purpose |
@@ -307,20 +370,22 @@ See [desktop/README.md](desktop/README.md) for the details. On cloud deployments
 | `api` | 8000 | FastAPI backend container |
 | `worker` | — | Intent extraction worker |
 
-Just Postgres (the usual local setup):
+`docker-compose.langfuse.yml` adds self-hosted Langfuse on port 3100 for LLM tracing.
+
+Just Postgres (lightweight local setup without the full stack):
 
 ```bash
 docker compose up postgres -d
 npm run db:setup
 ```
 
-The full API and worker:
+The full API and worker without `run.sh`:
 
 ```bash
-docker compose up api worker redis postgres -d
+docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d --build
 ```
 
-You still run the Next.js frontend yourself with `npm run dev` unless you deploy it somewhere else.
+You still run the Next.js frontend yourself with `./run.sh dev` or `npm run dev` unless you deploy it somewhere else.
 
 ## Environment variables
 

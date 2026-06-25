@@ -13,7 +13,6 @@ from app.routers import (
     notes,
     priority,
     recipes,
-    search,
     sessions,
     slack,
     transcription,
@@ -41,7 +40,6 @@ def create_app() -> FastAPI:
     app.include_router(sessions.router)
     app.include_router(notes.router)
     app.include_router(actions.router)
-    app.include_router(search.router)
     app.include_router(priority.router)
     app.include_router(recipes.router)
     app.include_router(meetings.router)

@@ -18,7 +18,15 @@ class PluginStatus:
 
 
 class IntegrationPlugin(ABC):
-    """Contract for OAuth-backed connections shown on the Settings page."""
+    """Contract for OAuth-backed connections shown on the Settings page.
+
+    To add a connection:
+      1. Create ``plugins/<slug>.py`` subclassing this class.
+      2. Call ``IntegrationRegistry.register(MyPlugin())`` at module bottom.
+      3. Import the module in ``plugins/__init__.py``.
+
+    Routes are generic: ``GET /api/integrations/{slug}`` and ``/callback``.
+    """
 
     slug: str
     provider: IntegrationProvider

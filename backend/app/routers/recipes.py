@@ -3,19 +3,15 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
-import secrets
 
 from app.auth import AppSession, require_auth
+from app.core.ids import generate_id
 from app.database import AsyncSessionLocal
 from app.models import CaptureSession, Recipe
 from app.services.agent.extractor import run_recipe
 from app.utils import serialize_model
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 @router.get("")
@@ -60,7 +56,7 @@ async def create_or_run_recipe(body: dict[str, Any], session: AppSession = Depen
             return {"output": output}
 
     recipe = Recipe(
-        id=new_id(),
+        id=generate_id(),
         userId=session.user.id,
         name=body["name"],
         prompt=body["prompt"],

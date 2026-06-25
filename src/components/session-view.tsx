@@ -6,11 +6,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { InlineSpinner } from "@/components/ui/skeletons";
-
-const ActionCard = dynamic(
-  () => import("./action-card").then((m) => ({ default: m.ActionCard })),
-  { ssr: false }
-);
+import { NotesShell } from "@/components/notes-shell";
+import { NoteSourceBadge } from "@/components/note-source-badge";
+import { NoteSourcePanel } from "@/components/note-source-panel";
+import { NoteAgentPanel } from "@/components/note-agent-panel";
+import { NoteDeleteButton } from "@/components/note-delete-button";
+import type { LinkedPriorityItem } from "@/lib/note-source-types";
 
 const LiveMicCapture = dynamic(
   () => import("./live-mic-capture").then((m) => ({ default: m.LiveMicCapture })),
@@ -45,8 +46,10 @@ type SessionData = {
   liveSummary: string;
   sourceType: string;
   sourceRef: string | null;
+  startedAt: string;
   messages: Message[];
   agentActions: Action[];
+  priorityItems?: LinkedPriorityItem[];
 };
 
 type RelatedContextHit = {
@@ -145,67 +148,14 @@ function RelatedContextPanel({
   );
 }
 
-function LiveNotesPanel({
-  liveSummary,
-  isRecording,
-}: {
-  liveSummary: string;
-  isRecording: boolean;
-}) {
-  return (
-    <div className="card p-5 min-h-[280px]">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">Live notes</h2>
-        {isRecording && (
-          <span className="flex items-center gap-1.5 text-xs badge-flame px-2 py-1 rounded-full">
-            <span className="landing-live-dot w-2 h-2" />
-            Recording
-          </span>
-        )}
-      </div>
-      {liveSummary ? (
-        <div className="text-sm leading-relaxed whitespace-pre-wrap prose-muted">
-          {liveSummary.split("\n").map((line, i) => {
-            if (line.startsWith("**") && line.endsWith("**")) {
-              return (
-                <p key={i} className="font-semibold text-foreground mt-2 first:mt-0">
-                  {line.replace(/\*\*/g, "")}
-                </p>
-              );
-            }
-            if (line.startsWith("• ") || line.startsWith("- ")) {
-              return (
-                <p key={i} className="pl-1 text-foreground">
-                  {line}
-                </p>
-              );
-            }
-            if (line.trim() === "") return <br key={i} />;
-            return (
-              <p key={i} className="text-foreground">
-                {line}
-              </p>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-muted">
-          Notes will appear here as the conversation unfolds — like Granola, Blaze
-          listens and summarizes for you.
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function SessionView({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
   const [userNotes, setUserNotes] = useState("");
   const [liveSummary, setLiveSummary] = useState("");
   const [newMessage, setNewMessage] = useState("");
-  const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [relatedContext, setRelatedContext] = useState<RelatedContext | null>(null);
 
   const fetchRelatedContext = useCallback(async () => {
@@ -301,13 +251,19 @@ export function SessionView({ sessionId }: { sessionId: string }) {
 
   const addMessage = async () => {
     if (!newMessage.trim()) return;
-    await fetch(`/api/sessions/${sessionId}`, {
+    const content = newMessage.trim();
+    setNewMessage("");
+    const res = await fetch(`/api/sessions/${sessionId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ speaker: "You", content: newMessage }),
+      body: JSON.stringify({ speaker: "You", content }),
     });
-    setNewMessage("");
-    fetchSession();
+    if (res.ok) {
+      const data = await res.json();
+      setSession((prev) =>
+        prev ? { ...prev, messages: data.messages ?? prev.messages } : prev
+      );
+    }
   };
 
   const endSession = async () => {
@@ -324,12 +280,34 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     operation: string,
     payload?: Action["payload"]
   ) => {
-    await fetch("/api/actions", {
+    const res = await fetch("/api/actions", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ actionId, operation, payload }),
     });
-    fetchSession();
+    if (res.ok) {
+      setSession((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          agentActions: prev.agentActions.map((a) =>
+            a.id === actionId
+              ? {
+                  ...a,
+                  status:
+                    operation === "confirm"
+                      ? "CONFIRMED"
+                      : operation === "reject"
+                        ? "REJECTED"
+                        : operation === "undo"
+                          ? "UNDONE"
+                          : a.status,
+                }
+              : a
+          ),
+        };
+      });
+    }
   };
 
   if (loading) {
@@ -344,284 +322,196 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   const isMeetingCapture =
     session.sourceType === "SLACK" || session.sourceType === "MEETING";
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-semibold">
-              {session.title ?? "Untitled session"}
-            </h1>
-            {session.sourceType === "SLACK" && (
-              <span className="text-xs px-2 py-1 rounded-full badge-muted">
-                Slack
-              </span>
-            )}
-            {session.sourceType === "MEETING" && (
-              <span className="text-xs px-2 py-1 rounded-full badge-flame">
-                Meeting
-              </span>
-            )}
-            {isActive && isMeetingCapture && (
-              <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full badge-flame">
-                <span className="landing-live-dot w-2 h-2" />
-                Capturing
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted mt-1">
-            {session.sourceType} · {session.messages.length} messages
-            {session.sourceRef ? ` · ${session.sourceRef}` : ""}
-          </p>
-          {session.sourceType === "GITHUB" && session.sourceRef && (
-            <Link
-              href="/inbox"
-              className="text-xs text-link hover:underline mt-1 inline-block"
+  if (isMeetingCapture && isActive) {
+    return (
+      <NotesShell
+        activeSessionId={sessionId}
+        defaultContextOpen
+        sidebarRefreshKey={sidebarRefreshKey}
+        toolbarActions={
+          <>
+            <NoteDeleteButton
+              sessionId={sessionId}
+              title={session.title}
+              onDeleted={() => setSidebarRefreshKey((key) => key + 1)}
+            />
+            <button
+              type="button"
+              onClick={endSession}
+              className="notes-toolbar-btn notes-toolbar-btn-primary"
             >
-              View in inbox
-            </Link>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {isActive && (
-            <button onClick={endSession} className="px-4 py-2 text-sm btn-secondary">
-              {isMeetingCapture ? "End meeting & save notes" : "End session"}
+              End meeting & save notes
             </button>
-          )}
-          {!isActive && (
-            <Link
-              href={`/notes/${sessionId}`}
-              className="px-4 py-2 text-sm btn-primary rounded-md hover:opacity-90"
+          </>
+        }
+        aside={
+          <NoteSourcePanel
+            sourceType={session.sourceType}
+            sourceRef={session.sourceRef}
+            messages={session.messages}
+            liveSummary={liveSummary || undefined}
+            userNotes={userNotes}
+            scratchEditable
+            onScratchChange={setUserNotes}
+            onScratchSave={saveNotes}
+          >
+            <section className="notes-context-section">
+              <LiveMicCapture
+                sessionId={sessionId}
+                onTranscript={fetchSession}
+                autoStart={session.sourceType === "SLACK"}
+              />
+            </section>
+            {session.sourceType === "SLACK" && (
+              <section className="notes-context-section">
+                <div className="flex gap-2">
+                  <input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addMessage()}
+                    placeholder="Type what was said..."
+                    className="notes-inline-input flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={addMessage}
+                    className="notes-toolbar-btn notes-toolbar-btn-primary shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+              </section>
+            )}
+            <section className="notes-context-section">
+              <RelatedContextPanel relatedContext={relatedContext} />
+            </section>
+          </NoteSourcePanel>
+        }
+      >
+        <main className="notes-document">
+          <h1 className="notes-title-display">
+            {session.title ?? "Untitled session"}
+          </h1>
+          <NoteSourceBadge
+            sourceType={session.sourceType}
+            sourceRef={session.sourceRef}
+            date={format(new Date(session.startedAt), "PPP")}
+          />
+          <span className="flex items-center gap-1.5 text-xs badge-flame px-2 py-1 rounded-full w-fit mb-4">
+            <span className="landing-live-dot w-2 h-2" />
+            Capturing
+          </span>
+
+          <article className="notes-article">
+            <NoteAgentPanel
+              sessionId={sessionId}
+              actions={session.agentActions}
+              showConfirmQueue={false}
+              onConfirm={(id, payload) => handleAction(id, "confirm", payload)}
+              onReject={(id) => handleAction(id, "reject")}
+              onUndo={(id) => handleAction(id, "undo")}
+              variant="hero"
+            />
+          </article>
+        </main>
+      </NotesShell>
+    );
+  }
+
+  return (
+    <NotesShell
+      activeSessionId={sessionId}
+      defaultContextOpen={
+        session.sourceType !== "MANUAL" ||
+        session.agentActions.length > 0 ||
+        session.messages.length > 0
+      }
+      sidebarRefreshKey={sidebarRefreshKey}
+      aside={
+        <NoteSourcePanel
+          sourceType={session.sourceType}
+          sourceRef={session.sourceRef}
+          messages={session.messages}
+          priorityItems={session.priorityItems ?? []}
+          liveSummary={liveSummary || undefined}
+          userNotes={userNotes}
+          scratchEditable={isActive}
+          onScratchChange={setUserNotes}
+          onScratchSave={saveNotes}
+          scratchDisabled={!isActive}
+        >
+          {isActive &&
+            (session.sourceType === "MANUAL" || session.sourceType === "SLACK") && (
+              <section className="notes-context-section">
+                <div className="flex gap-2">
+                  <input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addMessage()}
+                    placeholder={
+                      session.sourceType === "SLACK"
+                        ? "Type what was said..."
+                        : "Add a message..."
+                    }
+                    className="notes-inline-input flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={addMessage}
+                    className="notes-toolbar-btn notes-toolbar-btn-primary shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+              </section>
+            )}
+        </NoteSourcePanel>
+      }
+      toolbarActions={
+        <>
+          <NoteDeleteButton
+            sessionId={sessionId}
+            title={session.title}
+            onDeleted={() => setSidebarRefreshKey((key) => key + 1)}
+          />
+          {isActive ? (
+            <button
+              type="button"
+              onClick={endSession}
+              className="notes-toolbar-btn notes-toolbar-btn-primary"
             >
+              End session
+            </button>
+          ) : (
+            <Link href={`/notes/${sessionId}`} className="notes-toolbar-btn">
               View note
             </Link>
           )}
-        </div>
-      </div>
+        </>
+      }
+    >
+      <main className="notes-document">
+        <h1 className="notes-title-display">
+          {session.title ?? "Untitled session"}
+        </h1>
+        <NoteSourceBadge
+          sourceType={session.sourceType}
+          sourceRef={session.sourceRef}
+          date={format(new Date(session.startedAt), "PPP")}
+        />
 
-      {isMeetingCapture && isActive ? (
-        <div className="space-y-6">
-          <LiveMicCapture
+        <article className="notes-article">
+          <NoteAgentPanel
             sessionId={sessionId}
-            onTranscript={fetchSession}
-            autoStart={session.sourceType === "SLACK"}
+            actions={session.agentActions}
+            showConfirmQueue={false}
+            onConfirm={(id, payload) => handleAction(id, "confirm", payload)}
+            onReject={(id) => handleAction(id, "reject")}
+            onUndo={(id) => handleAction(id, "undo")}
+            variant="hero"
           />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <LiveNotesPanel liveSummary={liveSummary} isRecording={isActive} />
-            <RelatedContextPanel relatedContext={relatedContext} />
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold">Your notes</h2>
-                <button
-                  onClick={saveNotes}
-                  className="text-xs text-muted hover:text-foreground"
-                >
-                  Save
-                </button>
-              </div>
-              <textarea
-                value={userNotes}
-                onChange={(e) => setUserNotes(e.target.value)}
-                onBlur={saveNotes}
-                placeholder="Jot down anything Blaze should remember — your notes shape the final summary."
-                className="w-full h-[240px] px-3 py-2 text-sm border border-border rounded-lg bg-surface resize-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              onClick={() => setShowTranscript(!showTranscript)}
-              className="text-sm text-muted hover:text-foreground mb-2"
-            >
-              {showTranscript ? "Hide" : "Show"} transcript ({session.messages.length})
-            </button>
-            {showTranscript && (
-              <div className="card max-h-[400px] overflow-y-auto">
-                {session.messages.length === 0 ? (
-                  <p className="p-4 text-sm text-muted">
-                    No transcript yet — click <strong>Start listening</strong> above,
-                    or type in Slack / the box below.
-                  </p>
-                ) : (
-                  session.messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className="px-4 py-3 border-b border-border-subtle last:border-0"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-sm font-medium">{msg.speaker}</span>
-                        <span className="text-xs text-muted">
-                          {format(new Date(msg.sentAt), "HH:mm")}
-                        </span>
-                      </div>
-                      <p className="text-sm mt-0.5">{msg.content}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-            {session.sourceType === "SLACK" && isActive && (
-              <div className="flex gap-2">
-                <input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addMessage()}
-                  placeholder="Type what was said (voice isn't captured)..."
-                  className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-surface"
-                />
-                <button
-                  onClick={addMessage}
-                  className="px-4 py-2 text-sm btn-primary rounded-md"
-                >
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
-
-          {session.agentActions.length > 0 && (
-            <div>
-              <h2 className="text-sm font-medium text-muted uppercase tracking-wide mb-2">
-                Suggested actions
-              </h2>
-              <div className="space-y-2">
-                {session.agentActions.map((action) => (
-                  <ActionCard
-                    key={action.id}
-                    action={action}
-                    onConfirm={
-                      action.status === "PENDING"
-                        ? (id, payload) => handleAction(id, "confirm", payload)
-                        : undefined
-                    }
-                    onReject={
-                      action.status === "PENDING"
-                        ? (id) => handleAction(id, "reject")
-                        : undefined
-                    }
-                    onUndo={(id) => handleAction(id, "undo")}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h2 className="text-sm font-medium text-muted uppercase tracking-wide">
-              Transcript
-            </h2>
-            <div className="card min-h-[400px] max-h-[600px] overflow-y-auto">
-              {session.messages.length === 0 ? (
-                <p className="p-4 text-sm text-muted">
-                  {session.sourceType === "SLACK"
-                    ? "No transcript yet — start listening above, or type in Slack."
-                    : "No messages yet"}
-                </p>
-              ) : (
-                session.messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className="px-4 py-3 border-b border-border-subtle last:border-0"
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-sm font-medium">{msg.speaker}</span>
-                      <span className="text-xs text-muted">
-                        {format(new Date(msg.sentAt), "HH:mm")}
-                      </span>
-                    </div>
-                    <p className="text-sm mt-0.5">{msg.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {isActive && (session.sourceType === "MANUAL" || session.sourceType === "SLACK") && (
-              <div className="flex gap-2">
-                <input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addMessage()}
-                  placeholder={
-                    session.sourceType === "SLACK"
-                      ? "Type what was said (Blaze can't hear voice yet)..."
-                      : "Add a message (simulates conversation)..."
-                  }
-                  className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-surface"
-                />
-                <button
-                  onClick={addMessage}
-                  className="px-4 py-2 text-sm btn-primary rounded-md"
-                >
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {isActive && liveSummary && (
-              <LiveNotesPanel liveSummary={liveSummary} isRecording={isActive} />
-            )}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-medium text-muted uppercase tracking-wide">
-                  Scratch notes
-                </h2>
-                {isActive && (
-                  <button
-                    onClick={saveNotes}
-                    className="text-xs text-muted hover:text-foreground"
-                  >
-                    Save
-                  </button>
-                )}
-              </div>
-              <textarea
-                value={userNotes}
-                onChange={(e) => setUserNotes(e.target.value)}
-                onBlur={saveNotes}
-                disabled={!isActive}
-                placeholder="Jot down key points..."
-                className="w-full h-32 px-3 py-2 text-sm border border-border rounded-lg bg-surface resize-none"
-              />
-            </div>
-
-            <div>
-              <h2 className="text-sm font-medium text-muted uppercase tracking-wide mb-2">
-                Agent actions
-              </h2>
-              <div className="space-y-2">
-                {session.agentActions.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    Actions will appear here as the agent detects intents
-                  </p>
-                ) : (
-                  session.agentActions.map((action) => (
-                    <ActionCard
-                      key={action.id}
-                      action={action}
-                      onConfirm={
-                        action.status === "PENDING"
-                          ? (id, payload) => handleAction(id, "confirm", payload)
-                          : undefined
-                      }
-                      onReject={
-                        action.status === "PENDING"
-                          ? (id) => handleAction(id, "reject")
-                          : undefined
-                      }
-                      onUndo={(id) => handleAction(id, "undo")}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        </article>
+      </main>
+    </NotesShell>
   );
 }

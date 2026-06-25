@@ -1,10 +1,9 @@
 import json
-import secrets
 
-from openai import AsyncOpenAI
 from sqlalchemy import select
 
-from app.config import get_settings
+from app.core.ids import generate_id
+
 from app.database import AsyncSessionLocal
 from app.models import (
     AgentAction,
@@ -14,18 +13,10 @@ from app.models import (
     PriorityItem,
     RiskLevel,
 )
+from app.services.llm.client import get_openai_client
 from app.services.vector.context import link_priority_to_session
 from app.types import Intent
 from app.utils import serialize_model
-
-settings = get_settings()
-_openai: AsyncOpenAI | None = (
-    AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-)
-
-
-def new_id() -> str:
-    return secrets.token_hex(12)
 
 
 def _parse_external_id(external_id: str) -> tuple[str, int] | None:
@@ -94,7 +85,8 @@ async def extract_note_issue_plan(
     issue_title: str,
     issue_summary: str | None,
 ) -> Intent:
-    if not _openai:
+    openai = get_openai_client()
+    if not openai:
         return _default_note_plan(
             note_title, note_content, repo, issue_number, issue_title
         )
@@ -102,7 +94,7 @@ async def extract_note_issue_plan(
     note_text = "\n".join(p for p in [note_title.strip(), note_content.strip()] if p)
 
     try:
-        response = await _openai.chat.completions.create(
+        response = await openai.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -247,7 +239,7 @@ async def analyze_note_for_priority(
                     "updated": True,
                 }
 
-    action_id = new_id()
+    action_id = generate_id()
     async with AsyncSessionLocal() as db:
         action = AgentAction(
             id=action_id,
