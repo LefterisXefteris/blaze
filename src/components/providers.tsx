@@ -10,13 +10,18 @@ const Nav = dynamic(() => import("./nav").then((m) => ({ default: m.Nav })), {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isMarketing = pathname === "/" || pathname === "/login";
+  const isHome = pathname === "/";
+  const isMarketing = isHome || pathname === "/login";
   const showNav = !isMarketing;
 
   return (
     <>
       {showNav && <Nav />}
-      <main className={isMarketing ? "min-h-screen" : "flex-1"}>{children}</main>
+      {isHome ? (
+        children
+      ) : (
+        <main className={isMarketing ? "min-h-screen" : "flex-1"}>{children}</main>
+      )}
     </>
   );
 }
