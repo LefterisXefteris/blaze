@@ -1,0 +1,59 @@
+/* Form controls in globals.css are unlayered, so they beat Tailwind utilities.
+   Scope overrides to this page so the rest of the app keeps its theme. */
+
+.home-page input,
+.home-page textarea {
+  width: 100%;
+  margin-top: 0.375rem;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #1c1917;
+  background: #fffcf8;
+  border: 1px solid #cfc6b8;
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.home-page input::placeholder,
+.home-page textarea::placeholder {
+  color: #5c564e;
+  opacity: 1;
+}
+
+.home-page input:focus,
+.home-page textarea:focus {
+  outline: 2px solid #1c1917;
+  outline-offset: 2px;
+  border-color: #1c1917;
+  box-shadow: none;
+}
+
+.home-page a:focus-visible,
+.home-page button:focus-visible,
+.home-page [role="status"]:focus {
+  outline: 2px solid #1c1917;
+  outline-offset: 3px;
+}
+
+.home-page section,
+.home-page footer {
+  scroll-margin-top: 6.5rem;
+}
+
+.home-skip {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  z-index: 40;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: #1c1917;
+  color: #f3f0ea;
+  transform: translateY(-200%);
+}
+
+.home-skip:focus {
+  transform: none;
+}
