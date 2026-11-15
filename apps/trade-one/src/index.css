@@ -57,6 +57,53 @@ button {
   cursor: pointer;
 }
 
+.app-shell {
+  padding-bottom: 0;
+}
+
+/* —— MOBILE APP NAV —— */
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(7, 11, 16, 0.92);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-nav-tab {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--text-dim);
+    padding: 0.65rem 0.4rem;
+    border-radius: 2px;
+    transition: color 0.2s, background 0.2s;
+  }
+
+  .mobile-nav-tab.active,
+  .mobile-nav-tab:hover {
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+}
+
 /* —— HERO —— */
 .hero {
   position: relative;
@@ -688,5 +735,30 @@ button {
   .hero-footnote {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Phone: shorter hero + hide duplicate top links (bottom tabs own nav) */
+@media (max-width: 720px) {
+  .hero {
+    min-height: auto;
+  }
+
+  .hero-body {
+    padding: 1.25rem 1.5rem 2.5rem;
+    justify-content: flex-start;
+  }
+
+  .brand {
+    font-size: clamp(3.25rem, 18vw, 4.75rem);
+    margin-bottom: 1.1rem;
+  }
+
+  .hero-footnote {
+    padding-top: 1.75rem;
+  }
+
+  .nav-links {
+    display: none;
   }
 }
