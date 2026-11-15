@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CATALYSTS } from "../data/catalysts";
 import type { FeedFilter } from "../data/types";
 import { CatalystRow } from "./CatalystRow";
+import { TapeStrip } from "./TapeStrip";
 
 const FILTERS: { id: FeedFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -28,15 +29,17 @@ export function Feed() {
   );
 
   return (
-    <section className="section" id="feed" aria-labelledby="feed-title">
-      <p className="section-label">Catalyst feed</p>
+    <section className="section section-feed" id="feed" aria-labelledby="feed-title">
+      <p className="section-label">Blotter · catalyst tape</p>
       <h2 className="section-title" id="feed-title">
-        What moved — and what might.
+        Charts first. Thesis on tap.
       </h2>
       <p className="section-desc">
-        Tap a row for the trader thesis and speculation angle. Tags mark
-        confirmed filings vs rumor.
+        Sample prices + sparklines (not live). Tap a row for candles and the
+        trader angle.
       </p>
+
+      <TapeStrip />
 
       <div className="feed-toolbar" role="toolbar" aria-label="Filter catalysts">
         {FILTERS.map((f) => (
@@ -51,7 +54,14 @@ export function Feed() {
         ))}
       </div>
 
-      <div className="feed" role="list">
+      <div className="blotter-head" aria-hidden="true">
+        <span>Symbol</span>
+        <span>Last / Δ</span>
+        <span>Catalyst</span>
+        <span>Chart</span>
+      </div>
+
+      <div className="feed blotter" role="list">
         {visible.map((c) => (
           <CatalystRow
             key={c.id}
