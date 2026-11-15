@@ -58,3 +58,7 @@ backend/**/__pycache__/
 desktop/node_modules/
 desktop/dist/
 desktop/src-tauri/target/
+
+# Trade one (Vite app)
+apps/trade-one/node_modules/
+apps/trade-one/dist/
