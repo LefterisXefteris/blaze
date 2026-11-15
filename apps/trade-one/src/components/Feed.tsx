@@ -6,7 +6,7 @@ import { TapeStrip } from "./TapeStrip";
 
 const FILTERS: { id: FeedFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "fda", label: "FDA / PDUFA" },
+  { id: "fda", label: "FDA" },
   { id: "trial", label: "Trial" },
   { id: "ma", label: "M&A" },
   { id: "dilution", label: "Dilution" },
@@ -30,13 +30,12 @@ export function Feed() {
 
   return (
     <section className="section section-feed" id="feed" aria-labelledby="feed-title">
-      <p className="section-label">Blotter · catalyst tape</p>
+      <p className="section-label">Catalyst blotter</p>
       <h2 className="section-title" id="feed-title">
-        Charts first. Thesis on tap.
+        What moved — and what might.
       </h2>
       <p className="section-desc">
-        Sample prices + sparklines (not live). Tap a row for candles and the
-        trader angle.
+        Tap a row for candles and the trader thesis. Prices are sample stubs.
       </p>
 
       <TapeStrip />
@@ -46,7 +45,7 @@ export function Feed() {
           <button
             key={f.id}
             type="button"
-            className={`filter-chip${filter === f.id ? " active" : ""}`}
+            className={`filter-tab${filter === f.id ? " active" : ""}`}
             onClick={() => setFilter(f.id)}
           >
             {f.label}

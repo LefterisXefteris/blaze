@@ -37,7 +37,10 @@ html {
 
 body {
   font-family: var(--font-body);
-  background: var(--bg-deep);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(30, 70, 100, 0.18), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(45, 110, 95, 0.12), transparent 45%),
+    var(--bg-deep);
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
@@ -118,24 +121,23 @@ button {
 .hero-bg {
   position: absolute;
   inset: 0;
-  z-index: -2;
+  z-index: -3;
   background:
-    radial-gradient(ellipse 90% 70% at 70% 20%, rgba(45, 110, 95, 0.28), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 15% 80%, rgba(30, 70, 100, 0.22), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 85% 85%, rgba(180, 120, 60, 0.08), transparent 45%),
-    linear-gradient(165deg, #060a0e 0%, #0d1520 42%, #0a1218 100%);
+    radial-gradient(ellipse 100% 80% at 78% 30%, rgba(45, 110, 95, 0.32), transparent 58%),
+    radial-gradient(ellipse 70% 55% at 12% 75%, rgba(30, 70, 100, 0.26), transparent 52%),
+    linear-gradient(168deg, #05090d 0%, #0c1520 48%, #081018 100%);
 }
 
 .hero-grid {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   background-image:
-    linear-gradient(rgba(140, 168, 190, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(140, 168, 190, 0.04) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 75%);
-  animation: gridDrift 28s linear infinite;
+    linear-gradient(rgba(140, 168, 190, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 168, 190, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 85% 70% at 55% 45%, black 15%, transparent 72%);
+  animation: gridDrift 36s linear infinite;
 }
 
 @keyframes gridDrift {
@@ -143,33 +145,56 @@ button {
     background-position: 0 0;
   }
   to {
-    background-position: 56px 56px;
+    background-position: 64px 64px;
   }
 }
 
-.hero-orb {
+.hero-chart-plane {
   position: absolute;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow), transparent 68%);
-  filter: blur(40px);
-  top: 8%;
-  right: 8%;
+  inset: 12% -4% -8% 28%;
   z-index: -1;
-  opacity: 0.45;
-  animation: orbPulse 7s ease-in-out infinite;
+  opacity: 0;
+  animation: chartReveal 1.4s var(--ease) 0.35s forwards;
+  pointer-events: none;
 }
 
-@keyframes orbPulse {
-  0%,
-  100% {
-    transform: scale(1) translate(0, 0);
-    opacity: 0.4;
+.hero-chart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hero-chart-line {
+  stroke-dasharray: 1800;
+  stroke-dashoffset: 1800;
+  animation: chartDraw 1.8s var(--ease) 0.55s forwards;
+}
+
+.hero-chart-area {
+  opacity: 0;
+  animation: fadeSoft 1.2s var(--ease) 0.9s forwards;
+}
+
+@keyframes chartReveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
   }
-  50% {
-    transform: scale(1.12) translate(-20px, 16px);
-    opacity: 0.55;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes chartDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fadeSoft {
+  to {
+    opacity: 1;
   }
 }
 
@@ -240,13 +265,13 @@ button {
 
 .brand {
   font-family: var(--font-display);
-  font-size: clamp(4.5rem, 14vw, 8.5rem);
-  line-height: 0.9;
-  letter-spacing: -0.02em;
+  font-size: clamp(4.75rem, 15vw, 9rem);
+  line-height: 0.88;
+  letter-spacing: -0.03em;
   color: var(--text);
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.5rem;
   opacity: 0;
-  animation: riseIn 1s var(--ease) 0.1s forwards;
+  animation: riseIn 1s var(--ease) 0.08s forwards;
 }
 
 .brand em {
@@ -255,23 +280,25 @@ button {
 }
 
 .hero-headline {
-  font-family: var(--font-display);
-  font-size: clamp(1.75rem, 4.2vw, 2.75rem);
-  font-weight: 400;
-  line-height: 1.15;
-  max-width: 16ch;
-  margin-bottom: 1rem;
+  font-family: var(--font-body);
+  font-size: clamp(1.125rem, 2.4vw, 1.375rem);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  max-width: 22ch;
+  color: var(--text);
+  margin-bottom: 0.85rem;
   opacity: 0;
-  animation: riseIn 1s var(--ease) 0.25s forwards;
+  animation: riseIn 1s var(--ease) 0.22s forwards;
 }
 
 .hero-sub {
-  font-size: 1.0625rem;
+  font-size: 1rem;
   color: var(--text-muted);
-  max-width: 36ch;
-  margin-bottom: 2.25rem;
+  max-width: 34ch;
+  margin-bottom: 2rem;
   opacity: 0;
-  animation: riseIn 1s var(--ease) 0.4s forwards;
+  animation: riseIn 1s var(--ease) 0.36s forwards;
 }
 
 .cta-group {
@@ -299,8 +326,8 @@ button {
 }
 
 .cta-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(61, 206, 168, 0.28);
+  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .cta-primary svg {
@@ -385,34 +412,31 @@ button {
 .feed-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 0.15rem 1.1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.15rem;
 }
 
-.filter-chip {
+.filter-tab {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.45rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  color: var(--text-muted);
-  transition:
-    border-color 0.2s,
-    color 0.2s,
-    background 0.2s;
+  padding: 0.55rem 0;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.2s, border-color 0.2s;
 }
 
-.filter-chip:hover {
-  border-color: var(--line-strong);
+.filter-tab:hover {
   color: var(--text);
 }
 
-.filter-chip.active {
-  background: var(--accent-dim);
-  border-color: rgba(61, 206, 168, 0.45);
+.filter-tab.active {
   color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .tag {
@@ -447,48 +471,53 @@ button {
   color: var(--danger);
 }
 
-/* —— TAPE STRIP —— */
+/* —— TAPE STRIP (continuous rail, not card cluster) —— */
 .tape-strip {
-  margin-bottom: 1.25rem;
-  border: 1px solid var(--line);
-  background: var(--bg-elevated);
+  margin-bottom: 1.5rem;
   overflow: hidden;
 }
 
+.tape-rail {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: rgba(18, 26, 36, 0.55);
+}
+
 .tape-label {
-  display: block;
+  flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
   font-family: var(--font-mono);
   font-size: 0.5625rem;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--text-dim);
-  padding: 0.45rem 0.75rem 0;
+  padding: 0.75rem 0.4rem;
+  border-right: 1px solid var(--line);
 }
 
 .tape-track {
   display: flex;
-  gap: 0.25rem;
   overflow-x: auto;
-  padding: 0.5rem 0.5rem 0.65rem;
   scrollbar-width: thin;
+  flex: 1;
 }
 
 .tape-item {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  column-gap: 0.45rem;
-  row-gap: 0.1rem;
+  display: flex;
   align-items: center;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--line);
-  background: var(--bg-deep);
-  min-width: 9.5rem;
+  gap: 0.55rem;
+  padding: 0.7rem 1rem;
+  border-right: 1px solid var(--line);
+  min-width: max-content;
 }
 
 .tape-item .sparkline {
-  grid-column: 1 / -1;
-  width: 100%;
+  display: block;
+  flex: 0 0 auto;
 }
 
 .tape-ticker {
@@ -502,13 +531,13 @@ button {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   color: var(--text-muted);
-  justify-self: end;
 }
 
 .tape-chg {
   font-family: var(--font-mono);
   font-size: 0.625rem;
   font-weight: 600;
+  min-width: 3.6rem;
 }
 
 .tape-chg.up,
@@ -537,7 +566,7 @@ button {
 }
 
 .blotter-row {
-  padding: 0.95rem 0;
+  padding: 1.1rem 0.35rem;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background 0.25s var(--ease);
@@ -548,7 +577,11 @@ button {
 
 .blotter-row:hover,
 .blotter-row:focus-visible {
-  background: rgba(61, 206, 168, 0.03);
+  background: linear-gradient(
+    90deg,
+    rgba(61, 206, 168, 0.05),
+    transparent 70%
+  );
 }
 
 .blotter-main {
@@ -618,10 +651,11 @@ button {
 }
 
 .catalyst-title {
-  font-size: 0.9875rem;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 
 .blotter-meta {
@@ -659,9 +693,9 @@ button {
 
 .chart-pane {
   margin-top: 0.85rem;
-  padding: 0.85rem 1rem 0.65rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--line);
+  padding: 0.85rem 0 0.35rem;
+  background: transparent;
+  border-top: 1px solid var(--line);
 }
 
 .chart-pane-head {
@@ -957,65 +991,42 @@ button {
   .hero-headline,
   .hero-sub,
   .cta-group,
-  .hero-footnote {
+  .hero-footnote,
+  .hero-chart-plane,
+  .hero-chart-area {
     opacity: 1;
     transform: none;
   }
+  .hero-chart-line {
+    stroke-dashoffset: 0;
+  }
 }
 
-/* Compact terminal hero (all viewports lean chart-first) */
-.hero.hero-compact {
-  min-height: auto;
-}
-
-.hero.hero-compact .hero-body {
-  padding: 1.5rem 1.5rem 2.25rem;
-  justify-content: flex-start;
-}
-
-.hero.hero-compact .brand {
-  font-size: clamp(3rem, 10vw, 5.5rem);
-  margin-bottom: 1rem;
-}
-
-.hero.hero-compact .hero-headline {
-  max-width: 18ch;
-}
-
-.hero.hero-compact .hero-footnote {
-  margin-top: 1.5rem;
-  padding-top: 0;
-}
-
-.section.section-feed {
-  padding-top: 2.75rem;
-}
-
-/* Phone: hide duplicate top links (bottom tabs own nav) */
+/* Phone: one hero composition + bottom tabs for MVP sections */
 @media (max-width: 720px) {
-  .hero.hero-compact .hero-body {
-    padding: 1rem 1.25rem 1.75rem;
-  }
-
-  .hero.hero-compact .brand {
-    font-size: clamp(2.75rem, 16vw, 4rem);
-    margin-bottom: 0.75rem;
-  }
-
-  .hero.hero-compact .hero-sub {
-    margin-bottom: 1.25rem;
+  .hero-chart-plane {
+    inset: 28% -8% 0 0;
+    opacity: 0.85;
   }
 
   .nav-links {
     display: none;
   }
 
-  .section.section-feed {
-    padding-top: 1.75rem;
+  .hero-body {
+    padding: 1.5rem 1.25rem 3rem;
   }
 
   .blotter-chart .sparkline {
     width: 96px;
     height: 32px;
+  }
+
+  .tape-label {
+    display: none;
+  }
+
+  .cal-chart {
+    padding: 0.85rem 0.5rem 1.1rem;
   }
 }

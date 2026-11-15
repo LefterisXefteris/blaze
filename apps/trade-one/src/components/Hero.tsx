@@ -1,14 +1,18 @@
+import { HeroChart } from "./HeroChart";
+
 export function Hero() {
   return (
-    <header className="hero hero-compact" id="top">
+    <header className="hero" id="top">
       <div className="hero-bg" aria-hidden="true" />
       <div className="hero-grid" aria-hidden="true" />
-      <div className="hero-orb" aria-hidden="true" />
+      <div className="hero-chart-plane" aria-hidden="true">
+        <HeroChart />
+      </div>
 
       <nav className="nav" aria-label="Primary">
         <span className="nav-meta">
           <span className="live-dot" aria-hidden="true" />
-          Terminal · research ~14 Nov 2026
+          Research · 14 Nov 2026
         </span>
         <div className="nav-links">
           <a href="#feed">Feed</a>
@@ -21,10 +25,10 @@ export function Hero() {
         <h1 className="brand">
           Trade <em>one</em>
         </h1>
-        <p className="hero-headline">Pharma tape. Catalysts with charts.</p>
+        <p className="hero-headline">Pharma catalysts, before the tape moves.</p>
         <p className="hero-sub">
-          Blotter-style radar of FDA dates, trial hits, and dilution risk —
-          price context beside the “why.”
+          FDA dates, trial hits, and dilution risk — with price context beside
+          the why.
         </p>
         <div className="cta-group">
           <a className="cta-primary" href="#feed">
@@ -40,7 +44,7 @@ export function Hero() {
             </svg>
           </a>
           <a className="cta-ghost" href="#calendar">
-            Catalyst timeline
+            View timeline
           </a>
         </div>
         <p className="hero-footnote">

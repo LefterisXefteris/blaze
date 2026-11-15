@@ -7,13 +7,13 @@ export function Calendar() {
 
   return (
     <section className="section" id="calendar" aria-labelledby="cal-title">
-      <p className="section-label">Near-term calendar</p>
+      <p className="section-label">Catalyst timeline</p>
       <h2 className="section-title" id="cal-title">
-        Dates on the axis.
+        Dates worth watching.
       </h2>
       <p className="section-desc">
-        PDUFA / company targets plotted from 14 Nov 2026. Weekend goals often
-        resolve Fri or Mon.
+        PDUFA and company targets from 14 Nov 2026 — weekend goals often clear
+        Fri or Mon.
       </p>
 
       <div className="cal-chart" aria-label="Catalyst timeline chart">
