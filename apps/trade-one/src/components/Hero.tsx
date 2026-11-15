@@ -1,14 +1,18 @@
+import { HeroChart } from "./HeroChart";
+
 export function Hero() {
   return (
     <header className="hero" id="top">
       <div className="hero-bg" aria-hidden="true" />
       <div className="hero-grid" aria-hidden="true" />
-      <div className="hero-orb" aria-hidden="true" />
+      <div className="hero-chart-plane" aria-hidden="true">
+        <HeroChart />
+      </div>
 
       <nav className="nav" aria-label="Primary">
         <span className="nav-meta">
           <span className="live-dot" aria-hidden="true" />
-          Research ~14 Nov 2026
+          Research · 14 Nov 2026
         </span>
         <div className="nav-links">
           <a href="#feed">Feed</a>
@@ -23,12 +27,12 @@ export function Hero() {
         </h1>
         <p className="hero-headline">Pharma catalysts, before the tape moves.</p>
         <p className="hero-sub">
-          A live-feeling radar of FDA dates, trial hits, M&amp;A chatter, and
-          dilution risk — built for traders who need the “why” in one glance.
+          FDA dates, trial hits, and dilution risk — with price context beside
+          the why.
         </p>
         <div className="cta-group">
           <a className="cta-primary" href="#feed">
-            Open the feed
+            Open the blotter
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
                 d="M3 8h10M9 4l4 4-4 4"
@@ -39,13 +43,12 @@ export function Hero() {
               />
             </svg>
           </a>
-          <a className="cta-ghost" href="#glossary">
-            Peek the glossary
+          <a className="cta-ghost" href="#calendar">
+            View timeline
           </a>
         </div>
         <p className="hero-footnote">
-          Not financial advice · Pharma &amp; biotech only · Seeded from briefing
-          of 14 Nov 2026
+          Not financial advice · Sample charts · Seeded 14 Nov 2026
         </p>
       </div>
     </header>

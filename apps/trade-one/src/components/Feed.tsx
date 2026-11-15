@@ -2,10 +2,11 @@ import { useState } from "react";
 import { CATALYSTS } from "../data/catalysts";
 import type { FeedFilter } from "../data/types";
 import { CatalystRow } from "./CatalystRow";
+import { TapeStrip } from "./TapeStrip";
 
 const FILTERS: { id: FeedFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "fda", label: "FDA / PDUFA" },
+  { id: "fda", label: "FDA" },
   { id: "trial", label: "Trial" },
   { id: "ma", label: "M&A" },
   { id: "dilution", label: "Dilution" },
@@ -28,22 +29,23 @@ export function Feed() {
   );
 
   return (
-    <section className="section" id="feed" aria-labelledby="feed-title">
-      <p className="section-label">Catalyst feed</p>
+    <section className="section section-feed" id="feed" aria-labelledby="feed-title">
+      <p className="section-label">Catalyst blotter</p>
       <h2 className="section-title" id="feed-title">
         What moved — and what might.
       </h2>
       <p className="section-desc">
-        Tap a row for the trader thesis and speculation angle. Tags mark
-        confirmed filings vs rumor.
+        Tap a row for candles and the trader thesis. Prices are sample stubs.
       </p>
+
+      <TapeStrip />
 
       <div className="feed-toolbar" role="toolbar" aria-label="Filter catalysts">
         {FILTERS.map((f) => (
           <button
             key={f.id}
             type="button"
-            className={`filter-chip${filter === f.id ? " active" : ""}`}
+            className={`filter-tab${filter === f.id ? " active" : ""}`}
             onClick={() => setFilter(f.id)}
           >
             {f.label}
@@ -51,7 +53,14 @@ export function Feed() {
         ))}
       </div>
 
-      <div className="feed" role="list">
+      <div className="blotter-head" aria-hidden="true">
+        <span>Symbol</span>
+        <span>Last / Δ</span>
+        <span>Catalyst</span>
+        <span>Chart</span>
+      </div>
+
+      <div className="feed blotter" role="list">
         {visible.map((c) => (
           <CatalystRow
             key={c.id}
